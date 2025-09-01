@@ -1,0 +1,10 @@
+proxmox-talos-cluster-talos-cluster-control-00.yaml
+proxmox-talos-cluster-talos-cluster-control-01.yaml
+proxmox-talos-cluster-talos-cluster-control-02.yaml
+proxmox-talos-cluster-talos-cluster-gpu-worker-00.yaml
+proxmox-talos-cluster-talos-cluster-worker-01.yaml
+proxmox-talos-cluster-talos-cluster-worker-02.yaml
+talosconfig
+proxmox-talos-cluster-talos-lab-master-00.yaml
+proxmox-talos-cluster-talos-lab-worker-01.yaml
+proxmox-talos-cluster-talos-lab-gpu-worker-02.yaml

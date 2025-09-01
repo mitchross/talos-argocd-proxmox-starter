@@ -1,0 +1,29 @@
+# Ignore all .DS_Store files anywhere in the repository
+**/.DS_Store
+.DS_Store
+infrastructure/controllers/argocd/charts/*
+/monitoring/prometheus-stack/charts
+/monitoring/loki-stack/charts
+/monitoring/minio/charts
+/monitoring/promtail/charts
+/monitoring/tempo/charts
+/monitoring/thanos/charts
+
+# Added by gh-memory-bank
+chatmodes/
+instructions/
+*/chatmodes/
+*/instructions/
+
+# Terraform state & plans
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfplan*
+
+# Terraform credentials / env (sensitive)
+credentials.auto.tfvars
+*.auto.tfvars.json
+credentials.sh
+.env

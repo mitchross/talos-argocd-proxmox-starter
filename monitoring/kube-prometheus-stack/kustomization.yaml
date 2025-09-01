@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: kube-prometheus-stack
+
+resources:
+- namespace.yaml
+- http-route-grafana.yaml
+- http-route-prometheus.yaml
+- dashboards/k3s-cluster-overview-configmap.yaml
+- dashboards/dashboard-16450-configmap.yaml
+
+helmCharts:
+- name: kube-prometheus-stack
+  releaseName: prometheus
+  repo: https://prometheus-community.github.io/helm-charts
+  version: 77.0.0
+  valuesFile: values.yaml
+  includeCRDs: true
+
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "1"
+  # Prevent multi-attach errors during updates
+  argocd.argoproj.io/sync-options: "RespectIgnoreDifferences=true"
+

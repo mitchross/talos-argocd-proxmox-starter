@@ -1,0 +1,30 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gateway-internal
+  namespace: gateway
+spec:
+  addresses:
+  - type: IPAddress
+    value: 192.168.101.21
+  gatewayClassName: cilium
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: "*.vanillax.xyz"
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.vanillax.xyz"
+      tls:
+        certificateRefs:
+          - name: cert-vanillax
+            kind: Secret
+            group: "" # required
+      allowedRoutes:
+        namespaces:
+          from: All

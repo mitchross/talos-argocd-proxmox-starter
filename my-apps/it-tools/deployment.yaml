@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: it-tools
+  namespace: it-tools
+  labels:
+    app.kubernetes.io/name: it-tools
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: it-tools
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: it-tools
+    spec:
+      containers:
+      - name: it-tools
+        image: ghcr.io/sharevb/it-tools:nightly@sha256:90ba32f6ab338df7ae4a072e5f2d11cb6c43a291ffa325d08216f459ffeeb6f0
+        env: 
+        - name: TZ
+          value: America/Detroit
+        ports:
+        - name: http
+          containerPort: 8080

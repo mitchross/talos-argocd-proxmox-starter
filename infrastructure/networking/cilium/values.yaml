@@ -1,0 +1,96 @@
+# NOTE: Talos bootstrap vs runtime
+# The Talos inline bootstrap job often uses a local Talos proxy (localhost:7445)
+# so the bootstrap ConfigMap may deliberately set `k8sServiceHost: localhost` and
+# `k8sServicePort: 7445`. After the cluster is up (especially when running
+# kube-proxy replacement) Cilium needs a reachable API endpoint — either a
+# control-plane IP, a load-balanced endpoint, or an HA list via `k8s.apiServerURLs`.
+# Keep the values below for runtime (explicit API host/port). If you prefer
+# Talos-bootstrap-only defaults, set `k8sServiceHost: localhost` and
+# `k8sServicePort: 7445` in the inline bootstrap ConfigMap only.
+# cluster info
+cluster:
+  name: nuc
+  id: 1
+# API server reachable from Cilium agents (control-plane IP from Terraform)
+# Set to your control-plane IP or use k8s.apiServerURLs for HA
+kubeProxyReplacement: true
+k8sServiceHost: 192.168.10.101
+k8sServicePort: 6443
+securityContext:
+  capabilities:
+    ciliumAgent: [ CHOWN, KILL, NET_ADMIN, NET_RAW, IPC_LOCK, SYS_ADMIN, SYS_RESOURCE, DAC_OVERRIDE, FOWNER, SETGID, SETUID ]
+    cleanCiliumState: [ NET_ADMIN, SYS_ADMIN, SYS_RESOURCE ]
+cgroup:
+  autoMount:
+    enabled: true
+  hostRoot: /sys/fs/cgroup
+# https://docs.cilium.io/en/stable/network/concepts/ipam/
+ipam:
+  mode: kubernetes
+operator:
+  rollOutPods: true
+  replicas: 1
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+# Roll out cilium agent pods automatically when ConfigMap is updated.
+rollOutCiliumPods: true
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 512Mi
+debug:
+  enabled: true
+# Increase rate limit when doing L2 announcements
+k8sClientRateLimit:
+  qps: 100
+  burst: 200
+l2announcements:
+  enabled: true
+externalIPs:
+  enabled: true
+loadBalancer:
+  # https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/#maglev-consistent-hashing
+  algorithm: maglev
+gatewayAPI:
+  enabled: true
+  # Enable Application-Layer Protocol Negotiation (ALPN) which will attempt HTTP/2, then HTTP 1.1.
+  # Services that wish to use HTTP/2 must indicate that via their appProtocol (GEP-1911).
+  enableAlpn: false
+envoy:
+  securityContext:
+    capabilities:
+      keepCapNetBindService: true
+      envoy: [ NET_ADMIN, PERFMON, BPF ]
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+    rollOutPods: true
+  ui:
+    enabled: true
+    rollOutPods: true
+ingressController:
+  enabled: false
+  default: true
+  loadbalancerMode: shared
+  service:
+    annotations:
+      io.cilium/lb-ipam-ips: 192.168.101.25
+# mTLS
+authentication:
+  enabled: false
+  mutual:
+    spire:
+      enabled: false
+      install:
+        server:
+          dataStorage:
+            storageClass: cilium-spire-sc

@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: monitoring-components
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  generators:
+  - git:
+      repoURL: https://github.com/mitchross/k3s-argocd-starter.git
+      revision: HEAD
+      directories:
+      - path: monitoring/kube-prometheus-stack
+  template:
+    metadata:
+      name: '{{path.basename}}'
+      labels:
+        type: monitoring
+    spec:
+      project: monitoring
+      source:
+        plugin:
+          name: kustomize-build-with-helm
+        repoURL: https://github.com/mitchross/k3s-argocd-starter.git
+        targetRevision: HEAD
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        retry:
+          limit: 10
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 5m
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true
+        - RespectIgnoreDifferences=true
+        - ApplyOutOfSyncOnly=true
+        - Replace=false
+        - IgnoreMissingTemplate=true

@@ -1,0 +1,158 @@
+# Reduce resource usage for a single-node cluster
+global:
+  rbac:
+    create: true
+
+prometheusOperator:
+  enabled: true
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  nodeSelector:
+    kubernetes.io/arch: amd64
+
+  admissionWebhooks:
+    enabled: false
+
+  tls:
+    enabled: false
+
+grafana:
+  enabled: true
+  adminPassword: "admin"
+  defaultDashboardsEnabled: true
+  nodeSelector:
+    kubernetes.io/arch: amd64
+
+  # Fix multi-attach errors by configuring deployment strategy
+  deploymentStrategy:
+    type: Recreate
+
+  persistence:
+    enabled: true
+    storageClassName: longhorn
+    accessModes:
+    - ReadWriteOnce
+    size: 1Gi
+  service:
+    type: ClusterIP
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Enable sidecar for dashboard discovery
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+      provider:
+        allowUiUpdates: true
+        disableDelete: false
+        foldersFromFilesStructure: false
+
+  additionalDataSources:
+  - name: Prometheus
+    type: prometheus
+    url: http://prometheus-operated.kube-prometheus-stack.svc:9090
+
+  dashboards:
+    default:
+      prometheus-stats:
+        gnetId: 2
+        revision: 2
+        datasource: Prometheus
+      node-exporter:
+        gnetId: 1860
+        revision: 22
+        datasource: Prometheus
+
+prometheus:
+  enabled: true
+  service:
+    type: ClusterIP
+  prometheusSpec:
+    nodeSelector:
+      kubernetes.io/arch: amd64
+    retention: 7d
+    # Fix scraping timeouts and intervals to prevent broken pipe errors
+    scrapeInterval: 30s
+    scrapeTimeout: 10s
+    evaluationInterval: 30s
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: [ "ReadWriteOnce" ]
+          resources:
+            requests:
+              storage: 10Gi
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    nodeSelector:
+      kubernetes.io/arch: amd64
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: [ "ReadWriteOnce" ]
+          resources:
+            requests:
+              storage: 512Mi
+
+nodeExporter:
+  enabled: true
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  # Fix: Disable problematic nfsd collector and add timeout handling
+  extraArgs:
+  # Explicitly disable nfsd collector that's causing issues
+  - --no-collector.nfsd
+  # Add timeout handling for web requests
+  - --web.timeout=30s
+  # Reduce log verbosity for broken pipe errors  
+  - --log.level=warn
+  resources:
+    limits:
+      cpu: 50m
+      memory: 64Mi
+    requests:
+      cpu: 20m
+      memory: 32Mi
+
+kubeStateMetrics:
+  enabled: true
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
