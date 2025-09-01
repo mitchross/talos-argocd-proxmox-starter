@@ -1,25 +1,29 @@
-🚀 Kubernetes Starter Kit
-=========================
+🚀 Talos + Terraform GitOps Starter Kit
+======================================
 
-Tutorial Video
+> End-to-end Infrastructure as Code + GitOps workflow: Terraform (Proxmox VM provisioning) → Talos (Kubernetes OS) → Cilium (CNI + L2) → Argo CD (GitOps) → Observability & Apps
+
+This repository is an updated evolution of an older K3s-focused stack. It now centers on **immutable Talos nodes provisioned by Terraform** with a fully declarative GitOps layer. Works on homelab Proxmox clusters (x86) and can be adapted for other environments. ARM SBC notes from the prior version are omitted for clarity, but the GitOps layer is architecture-agnostic.
+
+### 🎥 Prerequisite Tutorial (Part 1)
 
 [![Tutorial Walkthrough Video](https://img.youtube.com/vi/AY5mC5rDUcw/0.jpg)](https://youtu.be/AY5mC5rDUcw)
 
-
-
-> Modern GitOps deployment structure using Argo CD on Kubernetes
-
-This starter kit provides a production-ready foundation for deploying applications and infrastructure components using GitOps principles. Compatible with both Raspberry Pi and x86 systems.
+> IMPORTANT: This repository is **Part 2**. Before proceeding, **watch the video above and complete the baseline setup from that guide** (cluster fundamentals, core GitOps concepts). This repo builds on those foundations and replaces the earlier K3s-first approach with a Terraform + Talos provisioning pipeline. If you already have the context, continue below.
 
 ## 📋 Table of Contents
 
 - [Prerequisites](#-prerequisites)
 - [Architecture](#-architecture)
+- [Provisioning Flow](#-provisioning-flow)
 - [Quick Start](#-quick-start)
-  - [System Setup](#1-system-setup)
-  - [K3s Installation](#2-k3s-installation)
-  - [Networking Setup](#3-networking-setup-cilium)
-  - [GitOps Setup](#4-gitops-setup-argo-cd-part-1-of-2)
+  - [1. Terraform VM Provisioning](#1-terraform-vm-provisioning)
+  - [2. Talos Configuration Generation](#2-talos-configuration-generation)
+  - [3. Bootstrap Talos Cluster](#3-bootstrap-talos-cluster)
+  - [4. Install Cilium](#4-install-cilium-networking)
+  - [5. GitOps Bootstrap (Argo CD)](#5-gitops-setup-argo-cd)
+  - [6. Monitoring Stack](#6-monitoring-stack)
+  - [7. Final App Deployment](#7-final-application-deployment)
 - [Security Setup](#-security-setup)
   - [Cloudflare Integration](#cloudflare-integration)
 - [Verification](#-verification)
@@ -30,150 +34,144 @@ This starter kit provides a production-ready foundation for deploying applicatio
 
 ## 📋 Prerequisites
 
-- Kubernetes cluster (tested with K3s v1.32.0+k3s1)
-- Linux host (ARM or x86) with:
-  - Storage support (OpenEBS works with ZFS or standard directories)
-  - NFS and CIFS support (optional)
-  - Open-iSCSI
-- Cloudflare account (for DNS and Tunnel)
-- Local DNS setup (one of the following):
-  - Local DNS server ([AdGuard Home setup guide](docs/adguard-home-setup.md))
-  - Router with custom DNS capabilities (e.g., Firewalla)
-  - Ability to modify hosts file on all devices
+Local workstation tools (Homebrew one-liner below):
+
+- Terraform
+- talhelper
+- talosctl
+- kubectl
+- sops + age
+- helm
+- cilium-cli
+- (optional) Lens
+- Cloudflare account (DNS + Tunnel)
+- Proxmox cluster with API token & SSH access
+- Local DNS capability or Cloudflare wildcard + tunnel
+
+Install (macOS):
+```bash
+brew install terraform talhelper talosctl kubectl sops age helm cilium-cli
+```
+
+> NOTE: For detailed Talos/Terraform variable layout see `iac/iac-readme.md`.
 
 ## 🏗️ Architecture
 
 ```mermaid
-graph TD
-    subgraph "Argo CD Projects"
-        IP[Infrastructure Project] --> IAS[Infrastructure ApplicationSet]
-        AP[Applications Project] --> AAS[Applications ApplicationSet]
-        MP[Monitoring Project] --> MAS[Monitoring ApplicationSet]
-    end
-    
-    subgraph "Infrastructure Components"
-        IAS --> N[Networking]
-        IAS --> S[Storage]
-        IAS --> C[Controllers]
-        
-        N --> Cilium
-        N --> Cloudflared
-        N --> Gateway
-        
-        S --> OpenEBS
-        
-        C --> CertManager
-    end
-    
-    subgraph "Monitoring Stack"
-        MAS --> Prometheus
-        MAS --> Grafana
-        MAS --> AlertManager
-        MAS --> NodeExporter
-        MAS --> Loki
-        MAS --> Promtail
-    end
-    
-    subgraph "User Applications"
-        AAS --> P[Privacy Apps]
-        AAS --> Web[Web Apps]
-        AAS --> Other[Other Apps]
-        
-        P --> ProxiTok
-        P --> SearXNG
-        P --> LibReddit
-        
-        Web --> Nginx
-        Web --> Dashboard
-        
-        Other --> HelloWorld
-    end
+graph LR
+  %% Provisioning Layer
+  subgraph Provisioning
+    TF[Terraform / Proxmox Provider] --> PX[(Proxmox VMs)]
+    PX --> TL[Talos Nodes]
+    TL --> K8S[Talos Kubernetes Cluster]
+  end
 
-    style IP fill:#f9f,stroke:#333,stroke-width:2px
-    style AP fill:#f9f,stroke:#333,stroke-width:2px
-    style MP fill:#f9f,stroke:#333,stroke-width:2px
-    style IAS fill:#bbf,stroke:#333,stroke-width:2px
-    style AAS fill:#bbf,stroke:#333,stroke-width:2px
-    style MAS fill:#bbf,stroke:#333,stroke-width:2px
+  %% GitOps Control Plane
+  subgraph GitOps
+    AR[Argo CD] --> APPSET_INF[Infra AppSet]
+    AR --> APPSET_MON[Monitoring AppSet]
+    AR --> APPSET_APP[Apps AppSet]
+  end
+
+  %% Infra Components
+  APPSET_INF --> Cilium[Cilium]
+  APPSET_INF --> Gateway[Gateway API]
+  APPSET_INF --> Cloudflared[Cloudflared Tunnel]
+  APPSET_INF --> CertManager[cert-manager]
+  APPSET_INF --> Longhorn[Longhorn Storage]
+
+  %% Monitoring Stack
+  APPSET_MON --> Prometheus
+  APPSET_MON --> Grafana
+  APPSET_MON --> AlertManager
+  APPSET_MON --> Loki
+  APPSET_MON --> Promtail
+
+  %% Applications
+  APPSET_APP --> ProxiTok
+  APPSET_APP --> SearXNG
+  APPSET_APP --> LibReddit
+  APPSET_APP --> Homepage[Homepage Dashboard]
+  APPSET_APP --> Headlamp
+  APPSET_APP --> Misc[Hello World / Other]
+
+  classDef prov fill:#222,stroke:#555,color:#fff;
+  class TF,PX,TL,K8S prov;
+  classDef git fill:#0a4,stroke:#063,color:#fff;
+  class AR,APPSET_INF,APPSET_MON,APPSET_APP git;
 ```
 
 ### Key Features
-- **GitOps Structure**: Two-level Argo CD ApplicationSets for infrastructure/apps
-- **Security Boundaries**: Separate projects with RBAC enforcement
-- **Sync Waves**: Infrastructure deploys first (negative sync waves)
-- **Self-Healing**: Automated sync with pruning and failure recovery
+- **Immutable OS**: Talos nodes declaratively configured, no SSH drift.
+- **Infrastructure as Code**: Single Terraform variable file defines cluster topology.
+- **Secure Secrets Flow**: `talhelper` + SOPS + age for machine secrets.
+- **GitOps Separation**: Distinct Argo CD Projects (infra / monitoring / apps).
+- **Ordered Convergence**: Sync waves ensure infra → monitoring → apps.
+- **Recreate Strategy for RWO**: Prevents multi-attach PVC issues (see Troubleshooting).
+
+## 🔄 Provisioning Flow
+1. Define VM + role metadata in `iac/terraform/talos-cluster/cluster.auto.tfvars`.
+2. Provide Proxmox API/token credentials in `credentials.auto.tfvars` (git-ignored).
+3. `terraform apply` provisions VM shells (disk, CPU, MAC, static IP assumptions via DHCP config or cloud-init network inside Talos disk image bootstrap).
+4. Convert tfvars → `talenv.yaml` with helper script `iac/tfvars-to-talos-env.sh`.
+5. Generate & encrypt Talos secrets: `talhelper gensecret | sops -e > talsecret.sops.yaml`.
+6. `talhelper genconfig` renders machine + talosconfig under `iac/talos/clusterconfig/`.
+7. Apply per-node Talos machine configs (`talosctl apply-config --insecure ...`).
+8. Bootstrap control plane → fetch kubeconfig → install Cilium → GitOps bootstrap.
 
 ## 🚀 Quick Start
 
-### 1. System Setup
+### 1. Terraform VM Provisioning
 ```bash
-# Essential packages (ZFS/NFS/iSCSI)
-sudo apt update && sudo apt install -y \
-  zfsutils-linux \
-  nfs-kernel-server \
-  cifs-utils \
-  open-iscsi  # Optional but recommended
+cd iac/terraform/talos-cluster
 
-# Critical kernel modules for Cilium
-sudo modprobe iptable_raw xt_socket
-echo -e "xt_socket\niptable_raw" | sudo tee /etc/modules-load.d/cilium.conf
+# (EDIT) cluster.auto.tfvars & credentials.auto.tfvars first
+# Security: credentials.auto.tfvars is git-ignored
+
+terraform init -upgrade
+terraform plan -out=.tfplan
+terraform apply .tfplan
 ```
 
-### 2. K3s Installation
+### 2. Talos Configuration Generation
 ```bash
-# Customize these values!
-export SETUP_NODEIP=192.168.101.176  # Your node IP
-export SETUP_CLUSTERTOKEN=randomtokensecret12343  # Strong token
+cd ../../talos  # now in iac/talos
 
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="v1.33.3+k3s1" \
-  INSTALL_K3S_EXEC="--node-ip $SETUP_NODEIP \
-  --disable=flannel,local-storage,metrics-server,servicelb,traefik \
-  --flannel-backend='none' \
-  --disable-network-policy \
-  --disable-cloud-controller \
-  --disable-kube-proxy" \
-  K3S_TOKEN=$SETUP_CLUSTERTOKEN \
-  K3S_KUBECONFIG_MODE=644 sh -s -
+# Generate env mapping from Terraform-defined nodes
+cd .. && sh ./tfvars-to-talos-env.sh && cd talos
 
-# Configure kubectl access
-mkdir -p $HOME/.kube && sudo cp -i /etc/rancher/k3s/k3s.yaml $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config && chmod 600 $HOME/.kube/config
+# Export age private key (already generated per docs)
+export SOPS_AGE_KEY_FILE=$HOME/.config/sops/age/keys.txt
+
+# Generate & encrypt Talos secrets (idempotent if file exists)
+talhelper gensecret > talsecret.sops.yaml
+sops -e -i talsecret.sops.yaml  # Encrypt in-place
+
+# Render machine + talosconfig artifacts
+talhelper genconfig --env-file talenv.yaml
 ```
 
-### Adding Additional Nodes
+### 3. Bootstrap Talos Cluster
 ```bash
-# On the MASTER node - Get the token if you forgot it
-sudo cat /var/lib/rancher/k3s/server/node-token
+cd iac/talos
 
-# On each WORKER node:
-export MASTER_IP=192.168.101.202  # IP of your master node
-export NODE_IP=192.168.101.203    # IP of THIS worker node
-export K3S_TOKEN=your-node-token # From master's node-token file
+# Apply machine configs (first run uses --insecure)
+# NOTE: Replace IPs with those from your cluster.auto.tfvars
+talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig \
+  --nodes=192.168.10.101 --file=./clusterconfig/proxmox-talos-cluster-talos-lab-master-00.yaml
+talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig \
+  --nodes=192.168.10.211 --file=./clusterconfig/proxmox-talos-cluster-talos-lab-worker-01.yaml
+talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig \
+  --nodes=192.168.10.213 --file=./clusterconfig/proxmox-talos-cluster-talos-lab-gpu-worker-02.yaml
 
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="v1.33.3+k3s1" \
-  K3S_URL="https://$MASTER_IP:6443" \
-  K3S_TOKEN=$K3S_TOKEN \
-  INSTALL_K3S_EXEC="--node-ip $NODE_IP" sh -
-
-# On the MASTER node - Verify the new node joined
-kubectl get nodes -o wide
+export TALOSCONFIG=$(pwd)/clusterconfig/talosconfig
+talosctl bootstrap --nodes 192.168.10.101
+talosctl kubeconfig -n 192.168.10.101 ~/.kube/config
 ```
 
-### Setting Up Lens (Optional but Recommended)
-
-1. Install Lens from https://k8slens.dev/
-2. Get the kubeconfig:
-   - Copy from `/etc/rancher/k3s/k3s.yaml`, or
-   - Run: `kubectl config view --raw > kubeconfig.yaml`
-3. When adding to Lens:
-   - Replace the server URL with your K3s node IP
-   - Example: `server: https://192.168.10.202:6443`
-4. Save and connect
-
-### 3. Networking Setup (Cilium)
+### 4. Install Cilium (Networking)
 ```bash
-# Install Cilium CLI
-## CHECK ARCH FIRST
+# Install Cilium CLI if missing
 CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
 CLI_ARCH=amd64 && [ "$(uname -m)" = "aarch64" ] && CLI_ARCH=arm64
 curl -L --fail --remote-name-all \
@@ -182,39 +180,29 @@ sha256sum --check cilium-linux-${CLI_ARCH}.tar.gz.sha256sum
 sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
 rm cilium-linux-${CLI_ARCH}.tar.gz*
 
-# Helm install Cilium
-# use  helm install if first time, or helm upgrade if trying to update/upgrade/redo something 
-helm repo add cilium https://helm.cilium.io && helm repo update
-helm install cilium cilium/cilium -n kube-system \
-  -f infrastructure/networking/cilium/values.yaml \
-  --version 1.18.0 \
-  --set operator.replicas=1
+# Install (Gateway API + L2 announcements enabled via values or flags)
+cilium install \
+  --helm-set=ipam.mode=kubernetes \
+  --helm-set=kubeProxyReplacement=true \
+  --helm-set=cgroup.autoMount.enabled=true \
+  --helm-set=cgroup.hostRoot=/sys/fs/cgroup \
+  --helm-set=k8sServiceHost=192.168.10.101 \
+  --helm-set=k8sServicePort=6443 \
+  --helm-set=l2announcements.enabled=true \
+  --helm-set=externalIPs.enabled=true \
+  --set gatewayAPI.enabled=true \
+  --helm-set=devices=e+ \
+  --helm-set=operator.replicas=1
 
-# Validate installation
+# Validate
 cilium status && cilium connectivity test
 
 # Critical L2 Configuration Note:
-# Before applying the CiliumL2AnnouncementPolicy, you MUST identify your correct network interface:
-
-# 1. List all network interfaces:
-ip a
-
-# 2. Look for your main interface with an IP address matching your network
-# Common interface names:
-# - Ubuntu/Debian: enp1s0, ens18, eth0
-# - macOS: en0
-# - RPi: eth0
-# The interface should show your node's IP address, for example:
-#   enp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> ... inet 192.168.1.100/24
-
-# 3. Make note of your interface name for the CiliumL2AnnouncementPolicy
-# You'll need this when applying the infrastructure components via Argo CD
-
-# DO NOT apply the policy here - it will be applied through Argo CD
-# The policy file is located at: infrastructure/networking/cilium/l2policy.yaml
+# Identify your active NIC interface before applying the Argo CD-managed L2 policy
+ip -o link show | awk -F': ' '{print $2}'
 ```
 
-### 4. GitOps Setup (Argo CD - Part 1/2)
+### 5. GitOps Setup (Argo CD)
 ```bash
 # Install Helm
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
@@ -241,7 +229,7 @@ Update the argocd-secret secret with the new bcrypt hash.
 kubectl -n argocd patch secret argocd-secret -p '{"stringData": { "admin.password": "$2a$10$rgDBwhzr0ygDfH6scxkdddddx3cd612Cutw1Xu1X3a.kVrRq", "admin.passwordMtime": "'$(date +%FT%T%Z)'" }}'
 ```
 
-### 5. Monitoring Setup (kube-prometheus-stack with Custom Dashboards)
+### 6. Monitoring Stack (kube-prometheus-stack with Custom Dashboards)
 
 The monitoring stack uses kube-prometheus-stack Helm chart deployed via Argo CD, providing comprehensive Kubernetes and application monitoring with custom dashboard support.
 
@@ -352,7 +340,7 @@ kubectl get secret cloudflare-api-token -n cert-manager -o jsonpath='{.data.emai
 kubectl get secret cloudflare-api-token -n cert-manager -o jsonpath='{.data.api-token}' | base64 -d
 ```
 
-## 🛠️ Final Deployment
+### 7. Final Application Deployment
 ```bash
 # Apply infrastructure components
 # Run from root of git repo
@@ -411,7 +399,7 @@ cilium connectivity test --all-flows
 | **Monitoring** | Prometheus, Grafana, Loki, Promtail |
 | **Privacy**    | ProxiTok, SearXNG, LibReddit        |
 | **Infra**      | Cilium, Gateway API, Cloudflared    |
-| **Storage**    | OpenEBS                             |
+| **Storage**    | Longhorn                            |
 | **Security**   | cert-manager, Argo CD Projects      |
 
 ## 🤝 Contributing
@@ -556,27 +544,28 @@ If LoadBalancer IPs aren't advertising properly:
 2. Check interface exists on all nodes: `ip link show dev enp1s0`
 3. Ensure Cilium pods are running: `kubectl get pods -n kube-system -l k8s-app=cilium`
 
-**Longhorn Volume Mount Issues (Proxmox Host)**
+**Longhorn Volume Mount Issues:**
 ```bash
-# PROBLEM: Volumes fail to mount with "device busy" or multipath conflicts.
-# This can happen when the Proxmox host OS (like Debian/Ubuntu) has the
-# multipath daemon running, which can interfere with Longhorn's iSCSI devices.
+# PROBLEM: Volumes fail to mount with "device busy" or multipath conflicts
+# COMMON CAUSE: Linux multipath daemon interfering with Longhorn device management
 
-# SOLUTION: Disable multipathd on the PROXMOX HOST(s), not the Talos VMs.
-
-# 1. SSH into your Proxmox host.
-# 2. Check if multipathd is running.
+# Check if multipathd is running (often enabled by default on Ubuntu/Debian)
 systemctl status multipathd
 
-# 3. If it is active, disable and stop it.
+# SOLUTION: Disable multipath daemon on all nodes
 sudo systemctl disable --now multipathd
 
-# 4. Verify it's stopped.
+# Verify it's stopped
 systemctl is-active multipathd  # Should return "inactive"
 
-# 5. No restart of Talos nodes is typically required, but if volumes
-#    remain stuck, you can try restarting the Longhorn manager pods or
-#    rebooting the affected Kubernetes node from the Proxmox UI.
+# After disabling multipathd, restart kubelet to clear any cached device state
+sudo systemctl restart k3s  # For K3s
+# OR
+sudo systemctl restart kubelet  # For standard Kubernetes
+
+# Check Longhorn volume status after restart
+kubectl get volumes -n longhorn-system
+kubectl get pods -n longhorn-system
 
 # Reference: https://longhorn.io/kb/troubleshooting-volume-with-multipath/
 ```
