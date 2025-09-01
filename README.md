@@ -57,49 +57,49 @@ brew install terraform talhelper talosctl kubectl sops age helm cilium-cli
 
 ## 🏗️ Architecture
 
+High-Level (collapsed diagram below):
+
+- Provisioning: Terraform → Proxmox → Talos nodes → Talos-managed Kubernetes
+- GitOps Control Plane: Argo CD drives three ApplicationSets (infra, monitoring, apps)
+- Infrastructure Layer: Cilium, Gateway API, Cloudflared, cert-manager, Longhorn
+- Observability: Prometheus, Grafana, AlertManager, Loki, Promtail
+- Applications: Privacy (ProxiTok, SearXNG, LibReddit) + UI (Homepage, Headlamp, misc)
+
+<details>
+<summary><strong>Show Architecture Diagram (Mermaid)</strong></summary>
+
 ```mermaid
 graph LR
-  %% Provisioning Layer
   subgraph Provisioning
     TF[Terraform / Proxmox Provider] --> PX[(Proxmox VMs)]
     PX --> TL[Talos Nodes]
     TL --> K8S[Talos Kubernetes Cluster]
   end
-
-  %% GitOps Control Plane
   subgraph GitOps
     AR[Argo CD] --> APPSET_INF[Infra AppSet]
     AR --> APPSET_MON[Monitoring AppSet]
     AR --> APPSET_APP[Apps AppSet]
   end
-
-  %% Infra Components
-  APPSET_INF --> Cilium[Cilium]
+  APPSET_INF --> Cilium
   APPSET_INF --> Gateway[Gateway API]
   APPSET_INF --> Cloudflared[Cloudflared Tunnel]
-  APPSET_INF --> CertManager[cert-manager]
+  APPSET_INF --> CertManager
   APPSET_INF --> Longhorn[Longhorn Storage]
-
-  %% Monitoring Stack
   APPSET_MON --> Prometheus
   APPSET_MON --> Grafana
   APPSET_MON --> AlertManager
   APPSET_MON --> Loki
   APPSET_MON --> Promtail
-
-  %% Applications
   APPSET_APP --> ProxiTok
   APPSET_APP --> SearXNG
   APPSET_APP --> LibReddit
   APPSET_APP --> Homepage[Homepage Dashboard]
   APPSET_APP --> Headlamp
   APPSET_APP --> Misc[Hello World / Other]
-
-  classDef prov fill:#222,stroke:#555,color:#fff;
-  class TF,PX,TL,K8S prov;
-  classDef git fill:#0a4,stroke:#063,color:#fff;
-  class AR,APPSET_INF,APPSET_MON,APPSET_APP git;
 ```
+
+<sub>Diagram collapsible to reduce README footprint.</sub>
+</details>
 
 ### Key Features
 - **Immutable OS**: Talos nodes declaratively configured, no SSH drift.
