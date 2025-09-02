@@ -185,6 +185,7 @@ kubectl get nodes
 
 ```bash
 cilium install \
+  --version 1.18.1 \
   --helm-set=ipam.mode=kubernetes \
   --helm-set=kubeProxyReplacement=true \
   --helm-set=securityContext.capabilities.ciliumAgent="{CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}" \
