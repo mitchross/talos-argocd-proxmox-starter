@@ -154,9 +154,9 @@ talhelper genconfig --env-file talenv.yaml
 # 4. Deploy cluster (first-time deployment requires --insecure flag)
 
 # Then run each command with --insecure flag:
-talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig --nodes=192.168.10.101 --file=./clusterconfig/proxmox-talos-cluster-talos-lab-master-00.yaml
-talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig --nodes=192.168.10.211 --file=./clusterconfig/proxmox-talos-cluster-talos-lab-worker-01.yaml
-talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig --nodes=192.168.10.213 --file=./clusterconfig/proxmox-talos-cluster-talos-lab-gpu-worker-02.yaml
+talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig --nodes=192.168.10.101 --file=./clusterconfig/proxmox-talos-lab-cluster-talos-lab-master-00.yaml
+talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig --nodes=192.168.10.211 --file=./clusterconfig/proxmox-talos-lab-cluster-talos-lab-worker-01.yaml
+talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig --nodes=192.168.10.213 --file=./clusterconfig/proxmox-talos-lab-cluster-talos-lab-gpu-worker-02.yaml
 
 # Set up talosconfig for cluster access
 # To avoid overwriting your global talos config (~/.talos/config), export the TALOSCONFIG 

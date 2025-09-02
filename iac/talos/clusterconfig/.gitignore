@@ -8,3 +8,6 @@ talosconfig
 proxmox-talos-cluster-talos-lab-master-00.yaml
 proxmox-talos-cluster-talos-lab-worker-01.yaml
 proxmox-talos-cluster-talos-lab-gpu-worker-02.yaml
+proxmox-talos-lab-cluster-talos-lab-master-00.yaml
+proxmox-talos-lab-cluster-talos-lab-worker-01.yaml
+proxmox-talos-lab-cluster-talos-lab-gpu-worker-02.yaml

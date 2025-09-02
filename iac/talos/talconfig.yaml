@@ -1,10 +1,10 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/budimanjojo/talhelper/master/pkg/config/schemas/talconfig.json
 # renovate: datasource=docker depName=ghcr.io/siderolabs/installer
-talosVersion: v1.10.7
+talosVersion: v1.11.0
 # renovate: datasource=docker depName=ghcr.io/siderolabs/kubelet
 kubernetesVersion: v1.33.3
 # Cluster configuration
-clusterName: proxmox-talos-cluster
+clusterName: proxmox-talos-lab-cluster
 endpoint: https://${CONTROL_PLANE_ENDPOINT_IP}:6443
 clusterPodNets:
 - 10.14.0.0/16

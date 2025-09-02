@@ -3,8 +3,8 @@
 
 # Talos ISOs uploaded to Proxmox ISO storage
 # Confirm filenames match Proxmox storage list.
-talos_iso_file = "local:iso/talos-1.10.7.iso"              # Standard Talos ISO
-talos_gpu_iso_file = "local:iso/talos-1.10.7-gpu.iso"     # GPU-enabled Talos ISO (optional)
+talos_iso_file = "local:iso/talos-1.11.iso"              # Standard Talos ISO
+talos_gpu_iso_file = "local:iso/talos-1.11-gpu.iso"     # GPU-enabled Talos ISO (optional)
 
 # Primary system disk datastore id (Proxmox storage ID)
 # Choices visible on node: e.g. local, local-zfs, zfs1, zfs2, zfs3
