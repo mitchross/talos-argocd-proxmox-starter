@@ -185,19 +185,17 @@ kubectl get nodes
 
 ```bash
 cilium install \
-  --helm-set=ipam.mode=kubernetes \
-  --helm-set=kubeProxyReplacement=true \
-  --helm-set=securityContext.capabilities.ciliumAgent="{CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}" \
-  --helm-set=securityContext.capabilities.cleanCiliumState="{NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}" \
-   --helm-set=cgroup.autoMount.enabled=true \
-   --helm-set=cgroup.hostRoot=/sys/fs/cgroup \
-   --helm-set=k8sServiceHost=192.168.10.101 \
-   --helm-set=k8sServicePort=6443 \
-  --helm-set=l2announcements.enabled=true \
-  --helm-set=externalIPs.enabled=true \
+  --set ipam.mode=kubernetes \
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost=192.168.10.101 \
+  --set k8sServicePort=6443 \
+  --set l2announcements.enabled=true \
+  --set externalIPs.enabled=true \
   --set gatewayAPI.enabled=true \
-  --helm-set=devices=e+ \
-  --helm-set=operator.replicas=1
+  --set hubble.enabled=true \
+  --set hubble.relay.enabled=true \
+  --set hubble.ui.enabled=true \
+  --set operator.replicas=1
 ```
 
 --- 
@@ -208,7 +206,6 @@ App Deployment
 
 1. Install Lens from https://k8slens.dev/
 2. Get the kubeconfig:
-   - Copy from `/etc/rancher/k3s/k3s.yaml`, or
    - Run: `kubectl config view --raw > kubeconfig.yaml`
 3. When adding to Lens:
    - Replace the server URL with your K3s node IP
