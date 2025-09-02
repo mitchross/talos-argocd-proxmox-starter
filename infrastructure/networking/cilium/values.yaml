@@ -16,7 +16,14 @@ cluster:
 kubeProxyReplacement: true
 k8sServiceHost: 192.168.10.101
 k8sServicePort: 6443
-# Removed explicit capabilities & cgroup overrides – Talos + Cilium defaults are sufficient.
+cgroup:
+  autoMount:
+    enabled: false
+  hostRoot: /sys/fs/cgroup
+bpf:
+  autoMount:
+    enabled: false
+  hostRoot: /sys/fs/bpf
 # https://docs.cilium.io/en/stable/network/concepts/ipam/
 ipam:
   mode: kubernetes
@@ -32,6 +39,12 @@ operator:
       memory: 128Mi
 # Roll out cilium agent pods automatically when ConfigMap is updated.
 rollOutCiliumPods: true
+securityContext:
+  capabilities:
+    ciliumAgent: [ "CHOWN", "KILL", "NET_ADMIN", "NET_RAW", "IPC_LOCK", "SYS_ADMIN", "SYS_RESOURCE", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID" ]
+    cleanCiliumState: [ "NET_ADMIN", "SYS_ADMIN", "SYS_RESOURCE" ]
+devices:
+  - e+
 resources:
   limits:
     cpu: 1000m

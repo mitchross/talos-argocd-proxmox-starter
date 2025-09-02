@@ -185,17 +185,17 @@ kubectl get nodes
 
 ```bash
 cilium install \
-  --set ipam.mode=kubernetes \
-  --set kubeProxyReplacement=true \
-  --set k8sServiceHost=192.168.10.101 \
-  --set k8sServicePort=6443 \
-  --set l2announcements.enabled=true \
-  --set externalIPs.enabled=true \
+  --helm-set=ipam.mode=kubernetes \
+  --helm-set=kubeProxyReplacement=true \
+  --helm-set=securityContext.capabilities.ciliumAgent="{CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}" \
+  --helm-set=securityContext.capabilities.cleanCiliumState="{NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}" \
+  --helm-set=cgroup.autoMount.enabled=false \
+  --helm-set=cgroup.hostRoot=/sys/fs/cgroup \
+  --helm-set=l2announcements.enabled=true \
+  --helm-set=externalIPs.enabled=true \
   --set gatewayAPI.enabled=true \
-  --set hubble.enabled=true \
-  --set hubble.relay.enabled=true \
-  --set hubble.ui.enabled=true \
-  --set operator.replicas=1
+  --helm-set=devices=e+ \
+  --helm-set=operator.replicas=1
 ```
 
 --- 
