@@ -65,6 +65,7 @@ l2announcements:
 externalIPs:
   enabled: true
 loadBalancer:
+  acceleration: best-effort
   # https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/#maglev-consistent-hashing
   algorithm: maglev
 gatewayAPI:
