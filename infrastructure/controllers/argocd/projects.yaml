@@ -6,7 +6,7 @@ metadata:
 spec:
   description: Core infrastructure components
   sourceRepos:
-    - https://github.com/mitchross/k3s-argocd-starter.git
+    - https://github.com/mitchross/talos-argocd-proxmox-starter.git
   destinations:
     - namespace: "*"
       server: "*"
@@ -30,7 +30,7 @@ metadata:
 spec:
   description: User applications
   sourceRepos:
-    - https://github.com/mitchross/k3s-argocd-starter.git
+    - https://github.com/mitchross/talos-argocd-proxmox-starter.git
   destinations:
     - namespace: "*"
       server: "*"
@@ -54,7 +54,7 @@ metadata:
 spec:
   description: Monitoring and observability components
   sourceRepos:
-    - https://github.com/mitchross/k3s-argocd-starter.git
+    - https://github.com/mitchross/talos-argocd-proxmox-starter.git
   destinations:
     - namespace: "*"
       server: "*"

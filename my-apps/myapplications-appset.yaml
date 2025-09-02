@@ -9,7 +9,7 @@ metadata:
 spec:
   generators:
   - git:
-      repoURL: https://github.com/mitchross/k3s-argocd-starter.git
+      repoURL: https://github.com/mitchross/talos-argocd-proxmox-starter.git
       revision: HEAD
       directories:
       - path: my-apps/*
@@ -26,7 +26,7 @@ spec:
       source:
         plugin:
           name: kustomize-build-with-helm
-        repoURL: https://github.com/mitchross/k3s-argocd-starter.git
+        repoURL: https://github.com/mitchross/talos-argocd-proxmox-starter.git
         targetRevision: HEAD
         path: '{{path}}'
       destination:
