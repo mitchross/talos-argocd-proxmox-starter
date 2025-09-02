@@ -38,8 +38,10 @@ locals {
       additional_disk_size    = lookup(node, "additional_disk_size", null)
       additional_disk_storage = lookup(node, "additional_disk_size", null) != null ? local.additional_disk_storage : null
       role                    = node.role
-      # Determine which ISO to use based on role
-      iso_file = node.role == "worker-gpu" ? coalesce(var.talos_gpu_iso_file, var.talos_iso_file) : var.talos_iso_file
+  # Determine which ISO to use based on role.
+  # If a GPU-specific ISO variable is provided, use it; otherwise fall back to standard ISO variable.
+  # These ISOs should be pre-built Image Factory outputs matching the schematic hashes noted in talconfig.yaml comments.
+  iso_file = node.role == "worker-gpu" ? coalesce(var.talos_gpu_iso_file, var.talos_iso_file) : var.talos_iso_file
     }
   }
 

@@ -10,18 +10,9 @@ clusterPodNets:
 - 10.14.0.0/16
 clusterSvcNets:
 - 10.15.0.0/16
-# Common schematic for all nodes.
-# This will be merged with node-specific schematics.
-schematic:
-  customization:
-    systemExtensions:
-      officialExtensions:
-      - siderolabs/amd-ucode
-      - siderolabs/gasket-driver
-      - siderolabs/iscsi-tools
-      - siderolabs/nfsd
-      - siderolabs/qemu-guest-agent
-      - siderolabs/util-linux-tools
+# NOTE: Using pre-built Image Factory schematics, so dynamic schematic customization is removed.
+# Non-GPU schematic ID: ddf38e55e30aa9b2bb0b765054ed63444dc00244ab8bb4ad4ad92486602285f8
+# GPU schematic ID:     f14803370bbbcaf588a06a6f85fbf123a0cebbc10aa206f7052d6b37698b055e
 # Node configurations
 nodes:
 # Control plane node (from Terraform)
@@ -61,18 +52,7 @@ nodes:
   controlPlane: false
   ipAddress: ${TALOS_GPU_WORKER_IP_0}
   installDisk: /dev/sda
-  schematic:
-    customization:
-      systemExtensions:
-        officialExtensions:
-        - siderolabs/amd-ucode
-        - siderolabs/gasket-driver
-        - siderolabs/iscsi-tools
-        - siderolabs/nfsd
-        - siderolabs/nonfree-kmod-nvidia-production
-        - siderolabs/nvidia-container-toolkit-production
-        - siderolabs/qemu-guest-agent
-        - siderolabs/util-linux-tools
+  # GPU node uses a different pre-built schematic (LTS Nvidia extensions)
   networkInterfaces:
   - deviceSelector:
       hardwareAddr: "${TALOS_GPU_WORKER_MAC_0}"
@@ -101,6 +81,11 @@ nodes:
               [plugins."io.containerd.cri.v1.runtime"]
                 [plugins."io.containerd.cri.v1.runtime".containerd]
                   default_runtime_name = "nvidia"
+  # Pin GPU schematic image so NVIDIA modules/toolkit are present
+  - |-
+    machine:
+      install:
+        image: factory.talos.dev/metal-installer/f14803370bbbcaf588a06a6f85fbf123a0cebbc10aa206f7052d6b37698b055e:v1.11.0
 # Global patches
 patches:
 # Network configuration
@@ -164,9 +149,19 @@ controlPlane:
     machine:
       nodeLabels:
         node.kubernetes.io/exclude-from-external-load-balancers: ""
+  # Explicitly pin control plane image (same as non-GPU workers)
+  - |-
+    machine:
+      install:
+        image: factory.talos.dev/metal-installer/ddf38e55e30aa9b2bb0b765054ed63444dc00244ab8bb4ad4ad92486602285f8:v1.11.0
 # Worker specific configuration
 worker:
   patches:
+  # Pin non-GPU worker image (GPU node has its own node-level override)
+  - |-
+    machine:
+      install:
+        image: factory.talos.dev/metal-installer/ddf38e55e30aa9b2bb0b765054ed63444dc00244ab8bb4ad4ad92486602285f8:v1.11.0
   # Longhorn storage configuration
   - |-
     machine:
@@ -183,3 +178,4 @@ worker:
         - device: /dev/sdb
           partitions:
             - mountpoint: /var/mnt/longhorn_sdb
+  # (Optional future) Override GPU node image separately; applied via node-specific patch if needed.
