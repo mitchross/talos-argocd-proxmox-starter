@@ -1,6 +1,8 @@
 > This repository is a continuation of the [k3s-argocd-starter](https://github.com/mitchross/k3s-argocd-starter) project. It has been updated to use Terraform, Talos OS, and Proxmox.
 >
 > Watch the YouTube video for a detailed walkthrough: [https://www.youtube.com/watch?v=iCk1hgDZXlA](https://www.youtube.com/watch?v=iCk1hgDZXlA)
+>
+> The ArgoCD, Cloudflare, and application setup steps are still relevant from the previous video and repository. This repository primarily focuses on the automation of infrastructure provisioning using Terraform and Talos OS on Proxmox. For detailed application setup, please refer to the [k3s-argocd-starter](https://github.com/mitchross/k3s-argocd-starter) repository.
 
 ````markdown
 # Infrastructure as Code - Terraform + Talos Workflow
