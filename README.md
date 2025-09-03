@@ -1,208 +1,225 @@
-🚀 Talos + Terraform GitOps Starter Kit
-======================================
+> This repository is a continuation of the [k3s-argocd-starter](https://github.com/mitchross/k3s-argocd-starter) project. It has been updated to use Terraform, Talos OS, and Proxmox.
+>
+> Watch the YouTube video for a detailed walkthrough: [https://www.youtube.com/watch?v=iCk1hgDZXlA](https://www.youtube.com/watch?v=iCk1hgDZXlA)
 
-> End-to-end Infrastructure as Code + GitOps workflow: Terraform (Proxmox VM provisioning) → Talos (Kubernetes OS) → Cilium (CNI + L2) → Argo CD (GitOps) → Observability & Apps
+````markdown
+# Infrastructure as Code - Terraform + Talos Workflow
 
-This repository is an updated evolution of an older K3s-focused stack. It now centers on **immutable Talos nodes provisioned by Terraform** with a fully declarative GitOps layer. Works on homelab Proxmox clusters (x86) and can be adapted for other environments. ARM SBC notes from the prior version are omitted for clarity, but the GitOps layer is architecture-agnostic.
+Infrastructure provisioning code for Proxmox Talos cluster with automated value extraction.
 
-### 🎥 Prerequisite Tutorial (Part 1)
 
-[![Tutorial Walkthrough Video](https://img.youtube.com/vi/AY5mC5rDUcw/0.jpg)](https://youtu.be/AY5mC5rDUcw)
+## 🔧 Tools Required
 
-> IMPORTANT: This repository is **Part 2**. Before proceeding, **watch the video above and complete the baseline setup from that guide** (cluster fundamentals, core GitOps concepts). This repo builds on those foundations and replaces the earlier K3s-first approach with a Terraform + Talos provisioning pipeline. If you already have the context, continue below.
+- [Terraform](https://developer.hashicorp.com/terraform/downloads) - Infrastructure provisioning
+- [talhelper](https://budimanjojo.github.io/talhelper/latest/installation/) - Talos configuration management
+- [talosctl](https://www.talos.dev/latest/introduction/getting-started/) - Talos cluster management
+- [SOPS](https://github.com/getsops/sops) - Secrets encryption
+- [age](https://github.com/FiloSottile/age) - Encryption tool for SOPS
 
-## 📋 Table of Contents
-
-- [Prerequisites](#-prerequisites)
-- [Architecture](#-architecture)
-- [Provisioning Flow](#-provisioning-flow)
-- [Quick Start](#-quick-start)
-  - [1. Terraform VM Provisioning](#1-terraform-vm-provisioning)
-  - [2. Talos Configuration Generation](#2-talos-configuration-generation)
-  - [3. Bootstrap Talos Cluster](#3-bootstrap-talos-cluster)
-  - [4. Install Cilium](#4-install-cilium-networking)
-  - [5. GitOps Bootstrap (Argo CD)](#5-gitops-setup-argo-cd)
-  - [6. Monitoring Stack](#6-monitoring-stack)
-  - [7. Final App Deployment](#7-final-application-deployment)
-- [Security Setup](#-security-setup)
-  - [Cloudflare Integration](#cloudflare-integration)
-- [Verification](#-verification)
-- [Applications](#-included-applications)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Troubleshooting](#-troubleshooting)
-
-## 📋 Prerequisites
-
-Local workstation tools (Homebrew one-liner below):
-
-- Terraform
-- talhelper
-- talosctl
-- kubectl
-- sops + age
-- helm
-- cilium-cli
-- (optional) Lens
-- Cloudflare account (DNS + Tunnel)
-- Proxmox cluster with API token & SSH access
-- Local DNS capability or Cloudflare wildcard + tunnel
-
-Install (macOS):
+### Install with Homebrew
 ```bash
-brew install terraform talhelper talosctl kubectl sops age helm cilium-cli
+brew install terraform talhelper talosctl kubectl sops age cilium-cli
 ```
-
-> NOTE: For detailed Talos/Terraform variable layout see `iac/iac-readme.md`.
-
-## 🏗️ Architecture
-
-High-Level (collapsed diagram below):
-
-- Provisioning: Terraform → Proxmox → Talos nodes → Talos-managed Kubernetes
-- GitOps Control Plane: Argo CD drives three ApplicationSets (infra, monitoring, apps)
-- Infrastructure Layer: Cilium, Gateway API, Cloudflared, cert-manager, Longhorn
-- Observability: Prometheus, Grafana, AlertManager, Loki, Promtail
-- Applications: Privacy (ProxiTok, SearXNG, LibReddit) + UI (Homepage, Headlamp, misc)
-
-<details>
-<summary><strong>Show Architecture Diagram (Mermaid)</strong></summary>
-
-```mermaid
-graph LR
-  subgraph Provisioning
-    TF[Terraform / Proxmox Provider] --> PX[(Proxmox VMs)]
-    PX --> TL[Talos Nodes]
-    TL --> K8S[Talos Kubernetes Cluster]
-  end
-  subgraph GitOps
-    AR[Argo CD] --> APPSET_INF[Infra AppSet]
-    AR --> APPSET_MON[Monitoring AppSet]
-    AR --> APPSET_APP[Apps AppSet]
-  end
-  APPSET_INF --> Cilium
-  APPSET_INF --> Gateway[Gateway API]
-  APPSET_INF --> Cloudflared[Cloudflared Tunnel]
-  APPSET_INF --> CertManager
-  APPSET_INF --> Longhorn[Longhorn Storage]
-  APPSET_MON --> Prometheus
-  APPSET_MON --> Grafana
-  APPSET_MON --> AlertManager
-  APPSET_MON --> Loki
-  APPSET_MON --> Promtail
-  APPSET_APP --> ProxiTok
-  APPSET_APP --> SearXNG
-  APPSET_APP --> LibReddit
-  APPSET_APP --> Homepage[Homepage Dashboard]
-  APPSET_APP --> Headlamp
-  APPSET_APP --> Misc[Hello World / Other]
-```
-
-<sub>Diagram collapsible to reduce README footprint.</sub>
-</details>
-
-### Key Features
-- **Immutable OS**: Talos nodes declaratively configured, no SSH drift.
-- **Infrastructure as Code**: Single Terraform variable file defines cluster topology.
-- **Secure Secrets Flow**: `talhelper` + SOPS + age for machine secrets.
-- **GitOps Separation**: Distinct Argo CD Projects (infra / monitoring / apps).
-- **Ordered Convergence**: Sync waves ensure infra → monitoring → apps.
-- **Recreate Strategy for RWO**: Prevents multi-attach PVC issues (see Troubleshooting).
-
-## 🔄 Provisioning Flow
-1. Define VM + role metadata in `iac/terraform/talos-cluster/cluster.auto.tfvars`.
-2. Provide Proxmox API/token credentials in `credentials.auto.tfvars` (git-ignored).
-3. `terraform apply` provisions VM shells (disk, CPU, MAC, static IP assumptions via DHCP config or cloud-init network inside Talos disk image bootstrap).
-4. Convert tfvars → `talenv.yaml` with helper script `iac/tfvars-to-talos-env.sh`.
-5. Generate & encrypt Talos secrets: `talhelper gensecret | sops -e > talsecret.sops.yaml`.
-6. `talhelper genconfig` renders machine + talosconfig under `iac/talos/clusterconfig/`.
-7. Apply per-node Talos machine configs (`talosctl apply-config --insecure ...`).
-8. Bootstrap control plane → fetch kubeconfig → install Cilium → GitOps bootstrap.
 
 ## 🚀 Quick Start
 
-### 1. Terraform VM Provisioning
-```bash
-cd iac/terraform/talos-cluster
+**TL;DR - For experienced users:**
 
-# (EDIT) cluster.auto.tfvars & credentials.auto.tfvars first
-# Security: credentials.auto.tfvars is git-ignored
+1. Edit `terraform/talos-cluster/cluster.auto.tfvars` with your node config  
+2. Edit `terraform/talos-cluster/credentials.auto.tfvars` with Proxmox secrets
+3. Run the [Complete Workflow](#-complete-workflow) commands below
 
-terraform init -upgrade
-terraform plan -out=.tfplan
-terraform apply .tfplan
+**First time? Follow the detailed [Setup Guide](#%EF%B8%8F-setup-guide) below.**
+
+## ⚙️ Setup Guide
+
+### 1. Proxmox API Setup
+
+Generate an API token for Proxmox root user:
+
+1. Login to Proxmox web console using root user
+2. Navigate to Datacenter → Permissions → API Tokens → Add
+3. Select root as the user, give a name for the token ID and click Add
+4. Copy the token once displayed
+5. **Important:** Uncheck privilege separation
+
+You should get credentials in this format:
+```
+root@pam!iac
+cxxxxxcfedb-0ddd8-4c0f-932b-6adxxxxxxxxxc3ae
 ```
 
-### 2. Talos Configuration Generation
+
+
+### 2. Terraform Configuration
+
+The Terraform setup is fully declarative with all node configurations managed in one place.
+
+1. **Navigate to the Terraform directory:**
+   ```bash
+   cd iac/terraform/talos-cluster/
+   ```
+
+2. **Set up credentials:**
+   Create a `credentials.auto.tfvars` file (automatically loaded by Terraform). This file is git-ignored and contains your Proxmox secrets:
+   ```hcl
+   # iac/terraform/talos-cluster/credentials.auto.tfvars
+   proxmox_api_url      = "https://<your-proxmox-ip>:8006/api2/json"
+   proxmox_node         = "<your-proxmox-node-name>"
+   proxmox_api_token    = "<your-api-token-id>=<your-api-token-secret>"
+   proxmox_pool         = ""
+   proxmox_ssh_password = "<your-proxmox-ssh-password>"
+   ```
+
+3. **Configure your cluster nodes:**
+   Edit `cluster.auto.tfvars` with your node configurations:
+   ```hcl
+   nodes = [
+     {
+       name        = "talos-lab-master-00"
+       vmid        = 8000
+       role        = "controlplane"
+       ip          = "192.168.10.101"
+       mac_address = "BC:24:21:A4:B2:97"
+     },
+     {
+       name        = "talos-lab-worker-01"
+       vmid        = 8001
+       role        = "worker"
+       ip          = "192.168.10.211"
+       mac_address = "BC:24:21:4C:99:A2"
+     },
+     {
+       name        = "talos-lab-gpu-worker-02"
+       vmid        = 8002
+       role        = "worker-gpu"
+       ip          = "192.168.10.213"
+       mac_address = "BC:24:21:AD:82:0D"
+     }
+   ]
+   ```
+
+4. **Initialize and apply Terraform:**
+   ```bash
+   terraform init -upgrade
+   terraform plan -out=.tfplan
+   terraform apply .tfplan
+   ```
+
+
+
+### 3. SOPS Setup (Required for talhelper)
+
+talhelper requires encrypted secrets for cluster security:
+
+1. **Generate Age Key (One-time setup):**
+   ```bash
+   mkdir -p $HOME/.config/sops/age/
+   age-keygen -o $HOME/.config/sops/age/keys.txt
+   ```
+
+2. **Configure SOPS:**
+   Create `.sops.yaml` in the `iac/talos/` directory:
+   ```yaml
+   ---
+   creation_rules:
+     - age: >-
+         age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
+   Replace the age key with your **public key** from `$HOME/.config/sops/age/keys.txt`.
+
+### 4. Talos Configuration with talhelper
+
+
+# Generate talenv.yaml from Terraform configuration
+in iac folder run `sh ./tfvars-to-talos-env.sh`
+
+
 ```bash
-cd ../../talos  # now in iac/talos
+# Navigate to talos directory
+cd iac/talos
 
-# Generate env mapping from Terraform-defined nodes
-cd .. && sh ./tfvars-to-talos-env.sh && cd talos
-
-# Export age private key (already generated per docs)
+# Generate and encrypt talhelper secrets
 export SOPS_AGE_KEY_FILE=$HOME/.config/sops/age/keys.txt
-
-# Generate & encrypt Talos secrets (idempotent if file exists)
 talhelper gensecret > talsecret.sops.yaml
-sops -e -i talsecret.sops.yaml  # Encrypt in-place
+sops -e -i talsecret.sops.yaml
 
-# Render machine + talosconfig artifacts
+
+
+# Set up environment for SOPS and generate configuration
+export SOPS_AGE_KEY_FILE=$HOME/.config/sops/age/keys.txt
 talhelper genconfig --env-file talenv.yaml
 ```
 
-### 3. Bootstrap Talos Cluster
+
+
+### 5. Bootstrap Talos Cluster
+
 ```bash
-cd iac/talos
+# Apply configuration to all nodes
+# 4. Deploy cluster (first-time deployment requires --insecure flag)
 
-# Apply machine configs (first run uses --insecure)
-# NOTE: Replace IPs with those from your cluster.auto.tfvars
-talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig \
-  --nodes=192.168.10.101 --file=./clusterconfig/proxmox-talos-cluster-talos-lab-master-00.yaml
-talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig \
-  --nodes=192.168.10.211 --file=./clusterconfig/proxmox-talos-cluster-talos-lab-worker-01.yaml
-talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig \
-  --nodes=192.168.10.213 --file=./clusterconfig/proxmox-talos-cluster-talos-lab-gpu-worker-02.yaml
+# Then run each command with --insecure flag:
+talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig --nodes=192.168.10.101 --file=./clusterconfig/proxmox-talos-lab-cluster-talos-lab-master-00.yaml
+talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig --nodes=192.168.10.211 --file=./clusterconfig/proxmox-talos-lab-cluster-talos-lab-worker-01.yaml
+talosctl apply-config --insecure --talosconfig=./clusterconfig/talosconfig --nodes=192.168.10.213 --file=./clusterconfig/proxmox-talos-lab-cluster-talos-lab-gpu-worker-02.yaml
 
+# Set up talosconfig for cluster access
+# To avoid overwriting your global talos config (~/.talos/config), export the TALOSCONFIG 
+# environment variable for your current shell session. This tells talosctl where to find its configuration.
+# 192.168.10.101 is the control plane node you bootstrapped earlier 
 export TALOSCONFIG=$(pwd)/clusterconfig/talosconfig
-talosctl bootstrap --nodes 192.168.10.101
 talosctl kubeconfig -n 192.168.10.101 ~/.kube/config
+
+# For convenience, you can add this export command to your shell's profile 
+# (e.g., ~/.zshrc, ~/.bashrc) to make it permanent for new sessions.
+
+# Bootstrap the cluster (first control plane only)
+talhelper gencommand bootstrap 
+talosctl bootstrap --talosconfig=./clusterconfig/talosconfig --nodes=192.168.10.101;
+
+# Get kubeconfig
+talhelper gencommand kubeconfig 
+
+# Verify nodes are up
+kubectl get nodes
 ```
 
-### 4. Install Cilium (Networking)
-```bash
-# Install Cilium CLI if missing
-CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
-CLI_ARCH=amd64 && [ "$(uname -m)" = "aarch64" ] && CLI_ARCH=arm64
-curl -L --fail --remote-name-all \
-  https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
-sha256sum --check cilium-linux-${CLI_ARCH}.tar.gz.sha256sum
-sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
-rm cilium-linux-${CLI_ARCH}.tar.gz*
+### 6. Install Cilium CNI
 
-# Install (Gateway API + L2 announcements enabled via values or flags)
+**Important:** Take note of the Ethernet device. Devices might be named `ens`, `eth`, or `enp` depending on your system.
+
+```bash
 cilium install \
+  --version 1.18.1 \
   --helm-set=ipam.mode=kubernetes \
   --helm-set=kubeProxyReplacement=true \
-  --helm-set=cgroup.autoMount.enabled=true \
+  --helm-set=securityContext.capabilities.ciliumAgent="{CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}" \
+  --helm-set=securityContext.capabilities.cleanCiliumState="{NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}" \
+  --helm-set=cgroup.autoMount.enabled=false \
   --helm-set=cgroup.hostRoot=/sys/fs/cgroup \
-  --helm-set=k8sServiceHost=192.168.10.101 \
-  --helm-set=k8sServicePort=6443 \
   --helm-set=l2announcements.enabled=true \
   --helm-set=externalIPs.enabled=true \
   --set gatewayAPI.enabled=true \
   --helm-set=devices=e+ \
   --helm-set=operator.replicas=1
-
-# Validate
-cilium status && cilium connectivity test
-
-# Critical L2 Configuration Note:
-# Identify your active NIC interface before applying the Argo CD-managed L2 policy
-ip -o link show | awk -F': ' '{print $2}'
 ```
 
-### 5. GitOps Setup (Argo CD)
+--- 
+
+App Deployment 
+
+### Setting Up Lens (Optional but Recommended)
+
+1. Install Lens from https://k8slens.dev/
+2. Get the kubeconfig:
+   - Run: `kubectl config view --raw > kubeconfig.yaml`
+3. When adding to Lens:
+   - Replace the server URL with your K3s node IP
+   - Example: `server: https://192.168.10.202:6443`
+4. Save and connect
+
+### 4. GitOps Setup (Argo CD - Part 1/2)
 ```bash
 # Install Helm
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
@@ -229,7 +246,7 @@ Update the argocd-secret secret with the new bcrypt hash.
 kubectl -n argocd patch secret argocd-secret -p '{"stringData": { "admin.password": "$2a$10$rgDBwhzr0ygDfH6scxkdddddx3cd612Cutw1Xu1X3a.kVrRq", "admin.passwordMtime": "'$(date +%FT%T%Z)'" }}'
 ```
 
-### 6. Monitoring Stack (kube-prometheus-stack with Custom Dashboards)
+### 5. Monitoring Setup (kube-prometheus-stack with Custom Dashboards)
 
 The monitoring stack uses kube-prometheus-stack Helm chart deployed via Argo CD, providing comprehensive Kubernetes and application monitoring with custom dashboard support.
 
@@ -340,7 +357,7 @@ kubectl get secret cloudflare-api-token -n cert-manager -o jsonpath='{.data.emai
 kubectl get secret cloudflare-api-token -n cert-manager -o jsonpath='{.data.api-token}' | base64 -d
 ```
 
-### 7. Final Application Deployment
+## 🛠️ Final Deployment
 ```bash
 # Apply infrastructure components
 # Run from root of git repo
@@ -399,7 +416,7 @@ cilium connectivity test --all-flows
 | **Monitoring** | Prometheus, Grafana, Loki, Promtail |
 | **Privacy**    | ProxiTok, SearXNG, LibReddit        |
 | **Infra**      | Cilium, Gateway API, Cloudflared    |
-| **Storage**    | Longhorn                            |
+| **Storage**    | OpenEBS                             |
 | **Security**   | cert-manager, Argo CD Projects      |
 
 ## 🤝 Contributing
@@ -569,5 +586,3 @@ kubectl get pods -n longhorn-system
 
 # Reference: https://longhorn.io/kb/troubleshooting-volume-with-multipath/
 ```
-
-All original comments, warnings, and TODOs preserved. Formatting optimized for readability while maintaining technical accuracy.
