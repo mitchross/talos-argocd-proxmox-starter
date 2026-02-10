@@ -1,20 +1,10 @@
+# NFS CSI driver - provides NFS mount capability to the cluster
+# The backup system (VolSync) uses native NFS mounts injected by Kyverno,
+# not this CSI driver. This is for general-purpose NFS StorageClasses.
 
-driver:
-  name: nfs.csi.k8s.io
-  replicas: 1
+storageClass:
+  create: false
 
-storageClasses:
-- name: nfs-csi
-  defaultClass: false
-  parameters:
-    server: 192.168.10.133
-    share: /mnt/generaltank/k8s/
-  mountOptions:
-    - nfsvers=4.1
-
-csiDriver:
-  name: nfs.csi.k8s.io
-  attachRequired: false
-  fsGroupPolicy: File
-
-kubeletDir: /var/lib/kubelet
+controller:
+  runOnControlPlane: false
+  runOnMaster: false

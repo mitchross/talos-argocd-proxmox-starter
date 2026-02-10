@@ -1,61 +1,25 @@
-# Optimized for 1-2 node cluster
-longhorn:
-  # CSI controller replicas - keep at 1 for small clusters
-  replicas: 1
-
-csi:
-  attacher:
-    replicas: 1
-  provisioner:
-    replicas: 1
-  resizer:
-    replicas: 1
-  snapshotter:
-    replicas: 1
-
 defaultSettings:
   defaultDataPath: "/var/lib/longhorn"
-  # DATA replica count - this is what matters for your question
+  storageMinimalAvailablePercentage: "10"
+  storageOverProvisioningPercentage: "100"
   defaultDataLocality: "best-effort"
-  # For 2 nodes: use 1 replica (no redundancy but works)
-  # For 3+ nodes: use 2 replicas (redundancy with failure tolerance)
-  defaultClassReplicaCount: 1
-  # Force formatting to fix device busy errors
-  mkfsExt4Parameters: "-F"
-  # Reduce resource usage for small clusters
-  guaranteedInstanceManagerCPU: 5 # Reduce from default 12%
-  # Allow scheduling on nodes with existing workloads
-  taintToleration: "node-role.kubernetes.io/control-plane:NoSchedule"
+  replicaAutoBalance: "best-effort"
+  # Cleanup: limit snapshot accumulation per volume
+  snapshotMaxCount: "10"
+  autoCleanupSystemGeneratedSnapshot: "true"
+  guaranteedInstanceManagerCPU: "8"
 
 preUpgradeChecker:
   jobEnabled: false
 
 persistence:
   defaultClass: true
-  defaultClassReplicaCount: 1 # Data replicas per volume
+  # Set to 1 since VolSync + Kopia backs up all critical PVCs to NFS
+  # No need for on-cluster redundancy when off-cluster backups exist
+  defaultClassReplicaCount: 1
   defaultFsType: ext4
+  defaultDataLocality: best-effort
   reclaimPolicy: Delete
-  # Force mkfs to handle device busy issues
-  defaultMkfsParams: "-F"
-
-# Resource limits for small clusters
-longhornManager:
-  resources:
-    limits:
-      cpu: 200m
-      memory: 256Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
-
-longhornDriver:
-  resources:
-    limits:
-      cpu: 200m
-      memory: 256Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
 
 ingress:
   enabled: false

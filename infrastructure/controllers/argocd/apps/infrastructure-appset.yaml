@@ -1,0 +1,81 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: infrastructure
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  generators:
+  - git:
+      # CHANGE: Your Git repo URL
+      repoURL: https://github.com/mitchross/talos-argocd-proxmox-starter.git
+      revision: main
+      directories:
+      - path: infrastructure/networking/gateway
+      - path: infrastructure/storage/csi-driver-nfs
+      - path: infrastructure/database/*/*
+  template:
+    metadata:
+      name: '{{path.basename}}'
+      annotations:
+        argocd.argoproj.io/manifest-generate-paths: '{{path}}'
+      labels:
+        app.kubernetes.io/part-of: infrastructure
+    spec:
+      project: infrastructure
+      revisionHistoryLimit: 3
+      source:
+        # CHANGE: Your Git repo URL
+        repoURL: https://github.com/mitchross/talos-argocd-proxmox-starter.git
+        targetRevision: main
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true
+        - RespectIgnoreDifferences=true
+        - ApplyOutOfSyncOnly=true
+        - Replace=false
+        - IgnoreMissingTemplate=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      ignoreDifferences:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        jsonPointers:
+        - /spec/rules/0/backendRefs/0/group
+        - /spec/rules/0/backendRefs/0/kind
+        - /spec/rules/0/backendRefs/0/weight
+      - group: gateway.networking.k8s.io
+        kind: Gateway
+        jsonPointers:
+        - /status
+      - group: postgresql.cnpg.io
+        kind: Cluster
+        jsonPointers:
+        - /status
+        - /metadata/generation
+      - group: kyverno.io
+        kind: ClusterPolicy
+        jsonPointers:
+        - /status
+        - /metadata/generation
+      - group: ""
+        kind: PersistentVolumeClaim
+        jqPathExpressions:
+        - .spec.dataSourceRef
+        - .spec.dataSource
+        - .spec.volumeName
+        - .spec.resources.requests.storage

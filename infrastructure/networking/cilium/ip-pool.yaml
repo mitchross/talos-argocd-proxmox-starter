@@ -4,5 +4,5 @@ metadata:
   name: main-pool
 spec:
   blocks:
-  - cidr: "192.168.101.16/28" # /28 boundary aligned. Usable IPs: 192.168.101.17 - 192.168.101.30
-  allowFirstLastIPs: false # Reserve network (.16) and broadcast (.31)
+  - cidr: "192.168.1.240/28" # CHANGE: Your LB IP range. Usable IPs: .241-.254
+  allowFirstLastIPs: false

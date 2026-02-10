@@ -1,0 +1,52 @@
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: volsync-nfs-inject
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    policies.kyverno.io/title: VolSync NFS Mount Injection
+    policies.kyverno.io/description: >-
+      Injects NFS volume mount into VolSync mover jobs so Kopia can
+      access the shared repository on the NFS server.
+spec:
+  rules:
+    - name: inject-nfs-volume-add-volume
+      match:
+        any:
+          - resources:
+              kinds:
+                - Job
+              selector:
+                matchLabels:
+                  app.kubernetes.io/created-by: volsync
+      mutate:
+        patchStrategicMerge:
+          spec:
+            template:
+              spec:
+                volumes:
+                  - name: repository
+                    nfs:
+                      # CHANGE: Your NFS server IP
+                      server: "192.168.1.100"
+                      # CHANGE: Your NFS backup path
+                      path: "/mnt/backup/volsync"
+    - name: inject-nfs-volume-add-mounts
+      match:
+        any:
+          - resources:
+              kinds:
+                - Job
+              selector:
+                matchLabels:
+                  app.kubernetes.io/created-by: volsync
+      mutate:
+        foreach:
+          - list: "request.object.spec.template.spec.containers"
+            patchesJson6902: |-
+              - op: add
+                path: /spec/template/spec/containers/{{elementIndex}}/volumeMounts/-
+                value:
+                  name: repository
+                  mountPath: /repository

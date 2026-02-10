@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kyverno
+resources:
+- namespace.yaml
+- rbac-patch.yaml
+- policies/volsync-pvc-backup-restore.yaml
+- policies/volsync-nfs-inject.yaml
+- policies/volsync-orphan-cleanup.yaml
+helmCharts:
+- name: kyverno
+  repo: https://kyverno.github.io/kyverno
+  version: 3.7.0
+  releaseName: kyverno
+  valuesFile: values.yaml
+
+patchesJson6902:
+- target:
+    group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+    name: clusterpolicies.kyverno.io
+  patch: |-
+    - op: replace
+      path: /metadata/annotations
+      value:
+        argocd.argoproj.io/sync-options: Prune=false
+- target:
+    group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+    name: policies.kyverno.io
+  patch: |-
+    - op: replace
+      path: /metadata/annotations
+      value:
+        argocd.argoproj.io/sync-options: Prune=false

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: karakeep-configuration
+  namespace: karakeep
+data:
+  # CHANGE: Your Karakeep URL
+  NEXTAUTH_URL: "http://localhost:3000"
+  DISABLE_SIGNUPS: "false"
+  CRAWLER_ENABLE_ADBLOCKER: "true"
+  CRAWLER_JOB_TIMEOUT_SEC: "60"
+  OCR_LANGS: "eng"
+  WEBHOOK_ENABLED: "false"

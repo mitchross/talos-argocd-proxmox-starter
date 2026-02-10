@@ -3,11 +3,11 @@ kind: Kustomization
 namespace: longhorn-system
 resources:
   - namespace.yaml
-  - httproute.yaml
+  - volumesnapshotclass.yaml
 helmCharts:
   - name: longhorn
     repo: https://charts.longhorn.io
-    version: 1.9.1
+    version: 1.11.0
     releaseName: longhorn
     namespace: longhorn-system
     valuesFile: values.yaml

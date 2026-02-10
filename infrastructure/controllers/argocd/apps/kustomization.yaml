@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - projects.yaml
+  # Wave 0: Foundation
+  - cilium-app.yaml
+  # Wave 1: Storage
+  - longhorn-app.yaml
+  - snapshot-controller-app.yaml
+  - volsync-app.yaml
+  # Wave 2: Backup checker
+  - pvc-plumber-app.yaml
+  # Wave 3: Policy engine
+  - kyverno-app.yaml
+  # Wave 4: Infrastructure (auto-discovery)
+  - infrastructure-appset.yaml
+  # Wave 6: Applications (auto-discovery)
+  - my-apps-appset.yaml

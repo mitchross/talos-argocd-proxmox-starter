@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-server
+  namespace: immich
+  labels:
+    app.kubernetes.io/name: immich
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: immich
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: immich
+        app.kubernetes.io/component: server
+    spec:
+      containers:
+      - name: immich-server
+        image: ghcr.io/immich-app/immich-server:v2.5.5
+        ports:
+        - name: http
+          containerPort: 2283
+          protocol: TCP
+        env:
+        - name: TZ
+          value: "America/Los_Angeles"
+        - name: IMMICH_MEDIA_LOCATION
+          value: /library
+        - name: DB_HOSTNAME
+          value: "immich-database-rw.cloudnative-pg.svc.cluster.local"
+        - name: DB_PORT
+          value: "5432"
+        # CHANGE: These should match secrets/immich-db-credentials.yaml
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: immich-db-credentials
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: immich-db-credentials
+              key: password
+        - name: DB_DATABASE_NAME
+          value: "immich"
+        - name: REDIS_HOSTNAME
+          value: "immich-valkey.immich.svc.cluster.local"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: IMMICH_PORT
+          value: "2283"
+        - name: IMMICH_MACHINE_LEARNING_URL
+          value: "http://immich-machine-learning.immich.svc.cluster.local:3003"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 6Gi
+        livenessProbe:
+          httpGet:
+            path: /api/server/ping
+            port: 2283
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/server/ping
+            port: 2283
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /api/server/ping
+            port: 2283
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 60
+        volumeMounts:
+        - name: library
+          mountPath: /library
+        - name: geocoding
+          mountPath: /usr/src/app/.reverse-geocoding-dump
+        - name: transformers
+          mountPath: /usr/src/app/.transformers_cache
+      volumes:
+      - name: library
+        persistentVolumeClaim:
+          claimName: library
+      - name: geocoding
+        emptyDir: {}
+      - name: transformers
+        emptyDir: {}

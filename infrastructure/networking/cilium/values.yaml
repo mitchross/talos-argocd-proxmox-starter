@@ -1,21 +1,14 @@
-# NOTE: Talos bootstrap vs runtime
-# The Talos inline bootstrap job often uses a local Talos proxy (localhost:7445)
-# so the bootstrap ConfigMap may deliberately set `k8sServiceHost: localhost` and
-# `k8sServicePort: 7445`. After the cluster is up (especially when running
-# kube-proxy replacement) Cilium needs a reachable API endpoint — either a
-# control-plane IP, a load-balanced endpoint, or an HA list via `k8s.apiServerURLs`.
-# Keep the values below for runtime (explicit API host/port). If you prefer
-# Talos-bootstrap-only defaults, set `k8sServiceHost: localhost` and
-# `k8sServicePort: 7445` in the inline bootstrap ConfigMap only.
-# cluster info
+# Cluster identity
 cluster:
-  name: proxmox-talos-lab-cluster # Align with Talos clusterName for observability consistency
+  name: demo-cluster # CHANGE: Your cluster name
   id: 1
-# API server reachable from Cilium agents (control-plane IP from Terraform)
-# Set to your control-plane IP or use k8s.apiServerURLs for HA
+
+# Kube-proxy replacement
 kubeProxyReplacement: true
-k8sServiceHost: 192.168.10.101
-k8sServicePort: 6443
+k8sServiceHost: localhost    # CHANGE: Your API server IP (e.g., 192.168.1.10) or localhost for Talos
+k8sServicePort: 7445         # CHANGE: 6443 for standard k8s, 7445 for Talos proxy
+
+# Talos OS compatibility
 cgroup:
   autoMount:
     enabled: false
@@ -24,59 +17,50 @@ bpf:
   autoMount:
     enabled: false
   hostRoot: /sys/fs/bpf
-# https://docs.cilium.io/en/stable/network/concepts/ipam/
+
+# IPAM
 ipam:
   mode: kubernetes
+
 operator:
   rollOutPods: true
   replicas: 1
-  resources:
-    limits:
-      cpu: 500m
-      memory: 256Mi
-    requests:
-      cpu: 50m
-      memory: 128Mi
-# Roll out cilium agent pods automatically when ConfigMap is updated.
+
 rollOutCiliumPods: true
+
 securityContext:
   capabilities:
-    ciliumAgent: [ "CHOWN", "KILL", "NET_ADMIN", "NET_RAW", "IPC_LOCK", "SYS_ADMIN", "SYS_RESOURCE", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID" ]
-    cleanCiliumState: [ "NET_ADMIN", "SYS_ADMIN", "SYS_RESOURCE" ]
+    ciliumAgent: ["CHOWN", "KILL", "NET_ADMIN", "NET_RAW", "IPC_LOCK", "SYS_ADMIN", "SYS_RESOURCE", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"]
+    cleanCiliumState: ["NET_ADMIN", "SYS_ADMIN", "SYS_RESOURCE"]
+
 devices:
   - e+
-resources:
-  limits:
-    cpu: 1000m
-    memory: 1Gi
-  requests:
-    cpu: 200m
-    memory: 512Mi
-# Set debug to false for normal operations (enable temporarily when troubleshooting).
+
 debug:
   enabled: false
-# Increase rate limit when doing L2 announcements
-# Default client rate limits are adequate; can reintroduce if you throttle under heavy churn.
-# k8sClientRateLimit:
-#   qps: 100
-#   burst: 200
+
+# L2 announcements for LoadBalancer IPs
 l2announcements:
   enabled: true
 externalIPs:
   enabled: true
 loadBalancer:
   acceleration: best-effort
-  # https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/#maglev-consistent-hashing
   algorithm: maglev
+
+# Gateway API (replaces Ingress)
 gatewayAPI:
   enabled: true
-  enableAlpn: true # Allow HTTP/2 negotiation when appProtocol hints are present
-  enableAppProtocol: true # Explicitly honor service appProtocol hints
+  enableAlpn: true
+  enableAppProtocol: true
+
 envoy:
   securityContext:
     capabilities:
       keepCapNetBindService: true
-      envoy: [ NET_ADMIN, PERFMON, BPF ]
+      envoy: [NET_ADMIN, PERFMON, BPF]
+
+# Hubble observability (ArgoCD manages this - bootstrap with hubble disabled)
 hubble:
   enabled: true
   relay:
@@ -85,14 +69,3 @@ hubble:
   ui:
     enabled: true
     rollOutPods: true
-# Ingress controller disabled. Remove block to avoid confusion; re-add if enabling later.
-# mTLS
-authentication:
-  enabled: false
-  mutual:
-    spire:
-      enabled: false
-      install:
-        server:
-          dataStorage:
-            storageClass: cilium-spire-sc

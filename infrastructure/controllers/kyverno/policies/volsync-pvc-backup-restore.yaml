@@ -1,0 +1,258 @@
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: volsync-pvc-backup-restore
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    policies.kyverno.io/title: VolSync PVC Backup and Restore (Kopia NFS)
+    policies.kyverno.io/description: >-
+      Automatically configures VolSync backup and restore for PVCs with the
+      label backup: "hourly" or backup: "daily". Uses Kopia with NFS filesystem
+      backend. Generates plain Kubernetes Secrets (reads KOPIA_PASSWORD from a
+      source Secret in volsync-system namespace).
+spec:
+  mutateExistingOnPolicyUpdate: false
+  background: true
+  rules:
+    # Rule 0: Gate PVC creation on PVC Plumber availability (FAIL-CLOSED)
+    # If PVC Plumber is unreachable, DENY PVC creation to prevent data loss
+    # during disaster recovery. Apps retry via ArgoCD backoff until Plumber is healthy.
+    - name: require-pvc-plumber-available
+      match:
+        any:
+          - resources:
+              kinds:
+                - PersistentVolumeClaim
+              operations:
+                - CREATE
+              selector:
+                matchExpressions:
+                  - key: backup
+                    operator: In
+                    values: ["hourly", "daily"]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - volsync-system
+                - kyverno
+      context:
+        - name: plumberHealth
+          apiCall:
+            method: GET
+            service:
+              url: "http://pvc-plumber.volsync-system.svc.cluster.local/readyz"
+      validate:
+        message: >-
+          PVC Plumber is not available. Backup-labeled PVCs cannot be created
+          until PVC Plumber is healthy in volsync-system namespace. This ensures
+          backup restoration works correctly during disaster recovery.
+        deny:
+          conditions:
+            all:
+              - key: "{{ plumberHealth || 'unavailable' }}"
+                operator: Equals
+                value: "unavailable"
+
+    # Rule 1: Conditionally add dataSourceRef if backup exists in Kopia
+    # IMPORTANT: Only trigger on CREATE to avoid race conditions during PVC deletion
+    - name: add-datasource-if-backup-exists
+      match:
+        any:
+          - resources:
+              kinds:
+                - PersistentVolumeClaim
+              operations:
+                - CREATE
+              selector:
+                matchExpressions:
+                  - key: backup
+                    operator: In
+                    values: ["hourly", "daily"]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - volsync-system
+                - kyverno
+      context:
+        - name: backupCheck
+          apiCall:
+            method: GET
+            service:
+              url: "http://pvc-plumber.volsync-system.svc.cluster.local/exists/{{request.object.metadata.namespace}}/{{request.object.metadata.name}}"
+      preconditions:
+        all:
+          - key: "{{ backupCheck.exists || false }}"
+            operator: Equals
+            value: true
+          - key: "{{ request.object.spec.dataSourceRef || '' }}"
+            operator: Equals
+            value: ""
+      mutate:
+        patchStrategicMerge:
+          spec:
+            dataSourceRef:
+              apiGroup: volsync.backube
+              kind: ReplicationDestination
+              name: "{{request.object.metadata.name}}-backup"
+
+    # Rule 2: Generate Kopia credentials Secret
+    # Reads KOPIA_PASSWORD from the source Secret in volsync-system and
+    # creates a per-PVC Secret in the app namespace for VolSync to use.
+    - name: generate-kopia-secret
+      skipBackgroundRequests: false
+      match:
+        any:
+          - resources:
+              kinds:
+                - PersistentVolumeClaim
+              selector:
+                matchExpressions:
+                  - key: backup
+                    operator: In
+                    values: ["hourly", "daily"]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - volsync-system
+                - kyverno
+      context:
+        - name: kopiaPassword
+          apiCall:
+            urlPath: "/api/v1/namespaces/volsync-system/secrets/kopia-credentials"
+            jmesPath: "data.KOPIA_PASSWORD"
+      generate:
+        synchronize: true
+        apiVersion: v1
+        kind: Secret
+        name: "volsync-{{request.object.metadata.name}}"
+        namespace: "{{request.object.metadata.namespace}}"
+        data:
+          metadata:
+            labels:
+              app.kubernetes.io/managed-by: kyverno
+              volsync.backup/pvc: "{{request.object.metadata.name}}"
+          type: Opaque
+          data:
+            KOPIA_PASSWORD: "{{ kopiaPassword }}"
+          stringData:
+            KOPIA_REPOSITORY: "filesystem:///repository"
+            KOPIA_FS_PATH: "/repository"
+
+    # Rule 3: Generate ReplicationSource (backup schedule)
+    # IMPORTANT: Only create backup AFTER PVC is Bound to avoid conflicts with restore
+    - name: generate-replication-source
+      skipBackgroundRequests: false
+      match:
+        any:
+          - resources:
+              kinds:
+                - PersistentVolumeClaim
+              selector:
+                matchExpressions:
+                  - key: backup
+                    operator: In
+                    values: ["hourly", "daily"]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - volsync-system
+                - kyverno
+      preconditions:
+        all:
+          # Only create backup ReplicationSource after PVC is Bound
+          - key: "{{ request.object.status.phase || 'Pending' }}"
+            operator: Equals
+            value: "Bound"
+          # Don't create backup until PVC is at least 2 hours old
+          - key: "{{ time_since('', '{{request.object.metadata.creationTimestamp}}', '') }}"
+            operator: GreaterThanOrEquals
+            value: "2h"
+      generate:
+        synchronize: true
+        apiVersion: volsync.backube/v1alpha1
+        kind: ReplicationSource
+        name: "{{request.object.metadata.name}}-backup"
+        namespace: "{{request.object.metadata.namespace}}"
+        data:
+          metadata:
+            labels:
+              app.kubernetes.io/managed-by: kyverno
+              volsync.backup/pvc: "{{request.object.metadata.name}}"
+          spec:
+            sourcePVC: "{{request.object.metadata.name}}"
+            trigger:
+              schedule: "{{ request.object.metadata.labels.backup == 'hourly' && '0 * * * *' || '0 2 * * *' }}"
+            kopia:
+              repository: "volsync-{{request.object.metadata.name}}"
+              compression: zstd-fastest
+              parallelism: 2
+              retain:
+                hourly: 24
+                daily: 7
+                weekly: 4
+                monthly: 2
+              copyMethod: Snapshot
+              storageClassName: longhorn
+              volumeSnapshotClassName: longhorn-snapclass
+              cacheCapacity: "2Gi"
+              moverSecurityContext:
+                runAsUser: 568
+                runAsGroup: 568
+                fsGroup: 568
+
+    # Rule 4: Generate ReplicationDestination (restore capability)
+    - name: generate-replication-destination
+      skipBackgroundRequests: false
+      match:
+        any:
+          - resources:
+              kinds:
+                - PersistentVolumeClaim
+              selector:
+                matchExpressions:
+                  - key: backup
+                    operator: In
+                    values: ["hourly", "daily"]
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - volsync-system
+                - kyverno
+      generate:
+        synchronize: true
+        apiVersion: volsync.backube/v1alpha1
+        kind: ReplicationDestination
+        name: "{{request.object.metadata.name}}-backup"
+        namespace: "{{request.object.metadata.namespace}}"
+        data:
+          metadata:
+            labels:
+              app.kubernetes.io/managed-by: kyverno
+              volsync.backup/pvc: "{{request.object.metadata.name}}"
+          spec:
+            trigger:
+              manual: restore-once
+            kopia:
+              repository: "volsync-{{request.object.metadata.name}}"
+              copyMethod: Snapshot
+              storageClassName: longhorn
+              volumeSnapshotClassName: longhorn-snapclass
+              accessModes:
+                - "{{ request.object.spec.accessModes[0] || 'ReadWriteOnce' }}"
+              capacity: "{{ request.object.spec.resources.requests.storage }}"
+              cacheCapacity: "2Gi"
+              moverSecurityContext:
+                runAsUser: 568
+                runAsGroup: 568
+                fsGroup: 568

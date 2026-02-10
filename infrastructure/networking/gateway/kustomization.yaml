@@ -1,15 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 resources:
-
-  # Gateway resources
-  - gateway-class.yaml
-  - ns.yaml
-  - gw-external.yaml
-  - gw-internal.yaml
-  - cert-vanillax.yaml
-
+- ns.yaml
+- gw-external.yaml
+- gw-internal.yaml
 
 generatorOptions:
   disableNameSuffixHash: true

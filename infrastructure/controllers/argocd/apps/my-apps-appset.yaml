@@ -1,0 +1,67 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: my-apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  generators:
+  - git:
+      # CHANGE: Your Git repo URL
+      repoURL: https://github.com/mitchross/talos-argocd-proxmox-starter.git
+      revision: main
+      directories:
+      - path: my-apps/*/*
+  template:
+    metadata:
+      name: 'my-apps-{{path.basename}}'
+      annotations:
+        argocd.argoproj.io/manifest-generate-paths: '{{path}}'
+    spec:
+      project: my-apps
+      revisionHistoryLimit: 3
+      source:
+        # CHANGE: Your Git repo URL
+        repoURL: https://github.com/mitchross/talos-argocd-proxmox-starter.git
+        targetRevision: main
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+        - CreateNamespace=true
+        - ServerSideApply=true
+        - RespectIgnoreDifferences=true
+        - ApplyOutOfSyncOnly=true
+        - Replace=false
+        - IgnoreMissingTemplate=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      ignoreDifferences:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        jsonPointers:
+        - /spec/rules/0/backendRefs/0/group
+        - /spec/rules/0/backendRefs/0/kind
+        - /spec/rules/0/backendRefs/0/weight
+        - /status
+      - group: ""
+        kind: PersistentVolumeClaim
+        jqPathExpressions:
+        - .spec.dataSourceRef
+        - .spec.dataSource
+        - .spec.volumeName
+        - .spec.resources.requests.storage
+      info:
+      - name: 'Description'
+        value: 'Application: {{path.basename}}'

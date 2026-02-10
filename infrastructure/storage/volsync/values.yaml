@@ -1,0 +1,32 @@
+# VolSync Helm chart values
+# Using perfectra1n fork for Kopia mover support
+# https://github.com/perfectra1n/volsync
+
+image: &image
+  repository: ghcr.io/perfectra1n/volsync
+  tag: 0.17.7
+
+kopia: *image
+rclone: *image
+restic: *image
+rsync: *image
+rsync-tls: *image
+syncthing: *image
+
+metrics:
+  disableAuth: true
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+manageCRDs: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000

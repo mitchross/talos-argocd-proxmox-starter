@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cloudnative-pg
+commonLabels:
+  app.kubernetes.io/name: cloudnative-pg
+  app.kubernetes.io/managed-by: argocd
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "-10"
+resources:
+  - namespace.yaml
+  - clusterrole-full-rbac.yaml
+  - clusterrolebinding-full-rbac.yaml
+helmCharts:
+  - name: cloudnative-pg
+    repo: https://cloudnative-pg.github.io/charts
+    version: 0.27.1
+    releaseName: cloudnative-pg-operator
+    namespace: cloudnative-pg
+    includeCRDs: true
+    valuesInline:
+      config:
+        data:
+          ENABLE_AZURE_PVC_UPDATES: "false"
+          INHERITED_ANNOTATIONS: "argocd.argoproj.io/sync-wave"
+          INHERITED_LABELS: "app.kubernetes.io/managed-by"
+          JOB_TTL_SECONDS_AFTER_FINISHED: "3600"
+          FAILED_JOB_TTL_SECONDS_AFTER_FINISHED: "7200"

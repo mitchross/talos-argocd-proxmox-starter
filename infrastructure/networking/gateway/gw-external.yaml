@@ -4,27 +4,14 @@ metadata:
   name: gateway-external
   namespace: gateway
 spec:
-  addresses:
-  - type: IPAddress
-    value: 192.168.101.22
+  # CHANGE: Cilium will auto-assign from your CiliumLoadBalancerIPPool
   gatewayClassName: cilium
   listeners:
     - name: http
       protocol: HTTP
       port: 80
-      hostname: "*.vanillax.xyz"
-      allowedRoutes:
-        namespaces:
-          from: All
-    - name: https
-      protocol: HTTPS
-      port: 443
-      hostname: "*.vanillax.xyz"
-      tls:
-        certificateRefs:
-          - name: cert-vanillax
-            kind: Secret
-            group: "" # required
+      # CHANGE: Your domain
+      hostname: "*.demo.example.com"
       allowedRoutes:
         namespaces:
           from: All
