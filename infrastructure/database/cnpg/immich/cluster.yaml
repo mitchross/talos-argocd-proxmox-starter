@@ -25,6 +25,7 @@ spec:
       wal_compression: "on"
     pg_hba:
       - host all all 0.0.0.0/0 md5
+  # === NORMAL OPERATION ===
   bootstrap:
     initdb:
       database: immich
@@ -40,6 +41,42 @@ spec:
         - GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "immich";
         - ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "immich";
         - ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "immich";
+  # === DISASTER RECOVERY ===
+  # To recover from a Barman S3 backup, follow these steps:
+  #
+  # 1. Comment out the initdb bootstrap above
+  # 2. Uncomment the recovery bootstrap + externalClusters below
+  # 3. Set externalClusters[].barmanObjectStore.serverName to the CURRENT backup serverName (immich-database-v1)
+  # 4. Bump backup.barmanObjectStore.serverName to the NEXT version (e.g. immich-database-v2)
+  # 5. Extract the Cluster resource and apply directly (bypasses ArgoCD SSA + CNPG webhook conflict):
+  #      kubectl kustomize infrastructure/database/cnpg/immich/ \
+  #        | awk '/^apiVersion: postgresql.cnpg.io\/v1/{p=1} p{print} /^---/{if(p) exit}' \
+  #        > /tmp/immich-recovery.yaml
+  #      kubectl delete cluster immich-database -n cloudnative-pg --wait=false; \
+  #        sleep 15; \
+  #        kubectl create -f /tmp/immich-recovery.yaml
+  # 6. After recovery, revert to initdb bootstrap and push (keep new serverName in backup section)
+  #
+  # See docs/cnpg-disaster-recovery.md for full procedure and troubleshooting.
+  #
+  # bootstrap:
+  #   recovery:
+  #     source: immich-backup
+  # externalClusters:
+  #   - name: immich-backup
+  #     barmanObjectStore:
+  #       serverName: immich-database-v1
+  #       destinationPath: "s3://postgres-backups/cnpg/immich"    # CHANGE: your S3 bucket path
+  #       endpointURL: "http://your-s3-endpoint:9000"             # CHANGE: your S3 endpoint
+  #       s3Credentials:
+  #         accessKeyId:
+  #           name: cnpg-s3-credentials
+  #           key: AWS_ACCESS_KEY_ID
+  #         secretAccessKey:
+  #           name: cnpg-s3-credentials
+  #           key: AWS_SECRET_ACCESS_KEY
+  #       wal:
+  #         compression: gzip
   storage:
     size: 20Gi
     storageClass: longhorn
@@ -49,3 +86,20 @@ spec:
   enableSuperuserAccess: true
   monitoring:
     enablePodMonitor: false
+  backup:
+    barmanObjectStore:
+      serverName: immich-database-v1
+      destinationPath: "s3://postgres-backups/cnpg/immich"    # CHANGE: your S3 bucket path
+      endpointURL: "http://your-s3-endpoint:9000"             # CHANGE: your S3 endpoint
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-s3-credentials
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-s3-credentials
+          key: AWS_SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+      data:
+        compression: gzip
+    retentionPolicy: "14d"
