@@ -17,6 +17,9 @@ kubectl apply -f secrets/immich-db-credentials.yaml
 
 # Karakeep application secrets
 kubectl apply -f secrets/karakeep-secret.yaml
+
+# CNPG database backup credentials (S3 access for Barman backups)
+kubectl apply -f secrets/cnpg-s3-credentials.yaml
 ```
 
 ## Secret Details
@@ -27,6 +30,7 @@ kubectl apply -f secrets/karakeep-secret.yaml
 | `immich-app-secret` | `cloudnative-pg` | CNPG cluster bootstrap (DB owner credentials) |
 | `immich-db-credentials` | `immich` | Immich server (connects to DB) |
 | `karakeep-secret` | `karakeep` | Karakeep web app (NextAuth, Meili keys) |
+| `cnpg-s3-credentials` | `cloudnative-pg` | CNPG Barman backup (S3 access for database backups) |
 
 ## Important
 
@@ -34,3 +38,4 @@ kubectl apply -f secrets/karakeep-secret.yaml
   Kyverno automatically clones this password into per-PVC secrets in each app namespace.
 - Use the **same password** for Kopia across all environments if you want cross-cluster restore.
 - Never commit real secret values to Git.
+- For production, consider replacing plain Secrets with ExternalSecret (1Password) or SealedSecret for automated credential rotation.
