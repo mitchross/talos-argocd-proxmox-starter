@@ -67,6 +67,12 @@ if ! kubectl get secret immich-app-secret -n cloudnative-pg &> /dev/null; then
   MISSING_SECRETS=1
 fi
 
+if ! kubectl get secret cnpg-s3-credentials -n cloudnative-pg &> /dev/null; then
+  echo "MISSING: cnpg-s3-credentials in cloudnative-pg"
+  echo "  Apply: kubectl apply -f secrets/cnpg-s3-credentials.yaml"
+  MISSING_SECRETS=1
+fi
+
 if ! kubectl get secret immich-db-credentials -n immich &> /dev/null; then
   echo "MISSING: immich-db-credentials in immich"
   echo "  Apply: kubectl apply -f secrets/immich-db-credentials.yaml"
