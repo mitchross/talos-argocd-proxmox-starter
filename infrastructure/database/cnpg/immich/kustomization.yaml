@@ -8,3 +8,4 @@ commonAnnotations:
   argocd.argoproj.io/sync-wave: "-5"
 resources:
   - cluster.yaml
+  - scheduled-backup.yaml
