@@ -34,6 +34,7 @@ On disaster recovery:
 | **VolSync** | 0.18.2 | Async data replication (Kopia) |
 | **PVC Plumber** | 1.1.0 | Backup existence checker |
 | **CNPG** | 0.27.1 | PostgreSQL operator |
+| **Barman** | (built-in) | Database backup to S3 |
 
 ## Demo Applications
 
@@ -110,6 +111,7 @@ Wave 6: My-Apps AppSet (Immich, Karakeep - PVCs trigger Kyverno)
 | [Backup Demo](docs/03-backup-demo.md) | Walk through the backup pipeline |
 | [Restore Demo](docs/04-restore-demo.md) | Simulate disaster recovery with auto-restore |
 | [Architecture](docs/architecture.md) | System design and component interactions |
+| [CNPG Disaster Recovery](docs/cnpg-disaster-recovery.md) | Database backup and recovery procedures |
 
 ## Directory Structure
 

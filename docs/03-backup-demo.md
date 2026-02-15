@@ -94,3 +94,36 @@ kubectl delete pvc test-backup -n default
 |-------------|----------|-----------|
 | `backup: "hourly"` | Every hour (`0 * * * *`) | 24 hourly, 7 daily, 4 weekly, 2 monthly |
 | `backup: "daily"` | Daily at 2am (`0 2 * * *`) | Same retention policy |
+
+## Database Backups (CNPG — Separate System)
+
+The backup demo above covers **PVC data** (application files, caches, configs). Database backups use a **completely separate system**:
+
+| | PVC Backups | Database Backups |
+|---|---|---|
+| **Tool** | VolSync + Kopia | CNPG + Barman |
+| **Destination** | NFS | S3-compatible storage |
+| **Trigger** | PVC label (`backup: "hourly"`) | ScheduledBackup CRD |
+| **Auto-restore** | Yes (PVC Plumber + Kyverno) | **No** — manual recovery required |
+| **Schedule** | Hourly or daily (per label) | Daily at 2am + continuous WAL archiving |
+
+### Why databases don't use the PVC backup system
+
+- Filesystem-level backup of a running Postgres database can be inconsistent
+- Barman uses `pg_basebackup` + WAL archiving for point-in-time recovery
+- CNPG manages its own PVCs (names are auto-generated, can't add Kyverno labels)
+
+### Checking database backup status
+
+```bash
+# Check scheduled backups
+kubectl get scheduledbackup -n cloudnative-pg
+
+# Check latest backup
+kubectl get backup -n cloudnative-pg --sort-by=.metadata.creationTimestamp
+
+# Check WAL archiving status
+kubectl get cluster -n cloudnative-pg -o jsonpath='{range .items[*]}{.metadata.name}: {.status.firstRecoverabilityPoint}{"\n"}{end}'
+```
+
+For disaster recovery procedures, see [CNPG Disaster Recovery](cnpg-disaster-recovery.md).

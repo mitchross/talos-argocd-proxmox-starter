@@ -102,3 +102,22 @@ Remove `backup` label from PVC → Orphan cleanup runs (15min) → Deletes Repli
 | **PVC Plumber** | `ghcr.io/mitchross/pvc-plumber:1.1.0` | Checks Kopia repo for existing backups |
 | **Kopia** | (embedded in VolSync) | Dedup, compress, encrypt backup data |
 | **Longhorn** | `longhornio/longhorn:1.11.0` | Block storage with snapshot support |
+
+## Database Backups (Separate Path)
+
+CNPG databases use Barman to S3 — a separate backup path from the PVC/VolSync system:
+
+```
+┌──────────────────────────────────┐    ┌──────────────────────────────────┐
+│     PVC BACKUPS (App Data)       │    │   DATABASE BACKUPS (CNPG)        │
+│                                  │    │                                  │
+│  Tool: VolSync + Kopia           │    │  Tool: CNPG + Barman             │
+│  Dest: NFS                       │    │  Dest: S3-compatible storage     │
+│  Auto-restore: YES               │    │  Auto-restore: NO                │
+│    (PVC Plumber + Kyverno)       │    │    (manual kubectl create)       │
+│  Trigger: PVC label              │    │  Trigger: ScheduledBackup CRD    │
+│  Schedule: hourly/daily          │    │  Schedule: daily + WAL           │
+└──────────────────────────────────┘    └──────────────────────────────────┘
+```
+
+See [CNPG Disaster Recovery](cnpg-disaster-recovery.md) for recovery procedures.
