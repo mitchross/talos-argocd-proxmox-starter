@@ -48,6 +48,7 @@ Applications deploy in strict order to prevent race conditions:
 - **Trigger**: Add `backup: "hourly"` or `backup: "daily"` label to PVC
 - **Auto-restore**: YES — PVC Plumber checks for backups on PVC creation, Kyverno adds dataSourceRef
 - **Fail-closed**: PVC creation denied if PVC Plumber is down (prevents empty volumes during DR)
+- **Why NFS over S3**: No per-namespace credentials (Kyverno injects one NFS mount), cross-PVC dedup (all PVCs share one Kopia repo), direct filesystem speed. S3+Restic = per-PVC repos with zero dedup.
 
 ### Database Backups (Manual Recovery)
 

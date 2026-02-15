@@ -95,6 +95,18 @@ kubectl delete pvc test-backup -n default
 | `backup: "hourly"` | Every hour (`0 * * * *`) | 24 hourly, 7 daily, 4 weekly, 2 monthly |
 | `backup: "daily"` | Daily at 2am (`0 2 * * *`) | Same retention policy |
 
+## Why NFS + Kopia (Not S3 + Restic)?
+
+VolSync supports both Kopia (filesystem) and Restic (S3). This starter kit uses **Kopia on NFS** because:
+
+- **No per-namespace credentials** — Kyverno injects a single NFS mount into every mover pod. No S3 access keys to manage.
+- **Cross-PVC deduplication** — All PVCs share one Kopia repository. Kopia's content-defined chunking stores each unique chunk once across all backups. Delete and recreate an app? Kopia finds all chunks already exist — near-instant backup.
+- **Speed** — Direct filesystem access, no HTTP round-trips to an S3 endpoint.
+
+With S3 + Restic, each PVC gets its own separate repository — zero cross-PVC dedup. Delete an app and recreate it = full backup from scratch, more storage, more bandwidth, slower.
+
+See [Architecture](architecture.md#why-nfs-for-pvc-backups-not-s3) for the full comparison table and NFS repository structure.
+
 ## Database Backups (CNPG — Separate System)
 
 The backup demo above covers **PVC data** (application files, caches, configs). Database backups use a **completely separate system**:

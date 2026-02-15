@@ -93,6 +93,37 @@ PVC Plumber unreachable → Kyverno DENIES PVC creation → ArgoCD retries with 
 ### 4. Disable Backup
 Remove `backup` label from PVC → Orphan cleanup runs (15min) → Deletes ReplicationSource/Destination/Secret → Backups stop, data on NFS retained
 
+## Why NFS for PVC Backups (Not S3)?
+
+| | NFS + Kopia | S3 + Restic |
+|---|---|---|
+| **Credentials** | None per-namespace — Kyverno injects a single NFS mount | S3 credentials needed per-namespace |
+| **Speed** | Direct filesystem access, no HTTP overhead | HTTP round-trips to S3 endpoint |
+| **Deduplication** | Cross-PVC — all PVCs share one Kopia repo | Per-PVC — each gets a separate Restic repo |
+| **Re-deploy** | Delete + recreate app → Kopia finds all chunks exist → near-instant backup | Delete + recreate app → full backup from scratch |
+| **Browsable** | Kopia UI can directly browse NFS | Requires S3 browser or CLI |
+
+### Cross-PVC Deduplication
+
+All PVC backups share a **single Kopia repository** on NFS. Kopia uses content-defined chunking — files are split into variable-size chunks based on content, and each chunk is stored by its hash. If the same chunk exists anywhere in the repository (from any PVC, any namespace), it's stored only once.
+
+**What this means in practice:**
+- Delete and recreate an app → new PVC backs up → Kopia finds all chunks already exist → near-instant backup, almost zero new storage
+- Multiple apps with similar files (configs, timezone data) → one copy
+- Incremental backups only store changed chunks, not changed files
+
+### NFS Repository Structure
+
+```
+/your-nfs-path/volsync-kopia-nfs/
+├── kopia.repository           # Kopia repository config
+├── kopia.blobcfg              # Blob storage config
+├── p/                         # Pack files (ALL deduplicated data from ALL PVCs)
+├── q/                         # Index blobs
+├── n/                         # Manifest blobs (snapshots tagged by namespace/pvc-name)
+└── x/                         # Session blobs
+```
+
 ## Components
 
 | Component | Image | Purpose |
@@ -103,9 +134,33 @@ Remove `backup` label from PVC → Orphan cleanup runs (15min) → Deletes Repli
 | **Kopia** | (embedded in VolSync) | Dedup, compress, encrypt backup data |
 | **Longhorn** | `longhornio/longhorn:1.11.0` | Block storage with snapshot support |
 
-## Database Backups (Separate Path)
+## Why Two Backup Systems?
 
-CNPG databases use Barman to S3 — a separate backup path from the PVC/VolSync system:
+**PVC backups → NFS + Kopia** because:
+- VolSync's Kopia mover needs filesystem access for content-defined chunking and dedup
+- No per-namespace S3 credentials — Kyverno just injects the NFS mount
+- One shared repository = cross-PVC deduplication (see above)
+
+**Database backups → S3 + Barman** because:
+- CNPG's built-in backup only supports Barman, and Barman speaks S3 (not NFS)
+- Barman does SQL-aware backups (`pg_basebackup` + continuous WAL archiving) for point-in-time recovery
+- Filesystem-level snapshots of running Postgres can be inconsistent without the WAL stream
+- CNPG has no native NFS backup option
+
+Each tool uses its native backup mechanism. Forcing either into the other's model would mean worse backups.
+
+```
+┌──────────────────────────────────┐    ┌──────────────────────────────────┐
+│     PVC BACKUPS (App Data)       │    │   DATABASE BACKUPS (CNPG)        │
+│                                  │    │                                  │
+│  Tool: VolSync + Kopia           │    │  Tool: CNPG + Barman             │
+│  Dest: NFS                       │    │  Dest: S3-compatible storage     │
+│  Auto-restore: YES               │    │  Auto-restore: NO                │
+│    (PVC Plumber + Kyverno)       │    │    (manual kubectl create)       │
+│  Trigger: PVC label              │    │  Trigger: ScheduledBackup CRD    │
+│  Schedule: hourly/daily          │    │  Schedule: daily + WAL           │
+└──────────────────────────────────┘    └──────────────────────────────────┘
+```
 
 ```
 ┌──────────────────────────────────┐    ┌──────────────────────────────────┐
