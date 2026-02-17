@@ -12,7 +12,9 @@ resources:
   - pvc-plumber-app.yaml
   # Wave 3: Policy engine
   - kyverno-app.yaml
-  # Wave 4: Infrastructure (auto-discovery)
+  # Wave 4: CNPG operator (CRDs must exist before database clusters)
+  - cnpg-operator-app.yaml
+  # Wave 5: Infrastructure (gateway, cloudflared, NFS CSI, CNPG clusters)
   - infrastructure-appset.yaml
   # Wave 6: Applications (auto-discovery)
   - my-apps-appset.yaml

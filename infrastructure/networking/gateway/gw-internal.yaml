@@ -7,7 +7,7 @@ spec:
   # CHANGE: Your internal gateway IP from CiliumLoadBalancerIPPool
   addresses:
   - type: IPAddress
-    value: 192.168.1.50
+    value: 192.168.1.241
   gatewayClassName: cilium
   listeners:
     - name: http

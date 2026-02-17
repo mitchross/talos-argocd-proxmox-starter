@@ -54,6 +54,7 @@ kubectl create namespace volsync-system --dry-run=client -o yaml | kubectl apply
 kubectl create namespace cloudnative-pg --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
 kubectl create namespace immich --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
 kubectl create namespace karakeep --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
+kubectl create namespace cloudflared --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
 
 if ! kubectl get secret kopia-credentials -n volsync-system &> /dev/null; then
   echo "MISSING: kopia-credentials in volsync-system"
@@ -82,6 +83,12 @@ fi
 if ! kubectl get secret karakeep-secret -n karakeep &> /dev/null; then
   echo "MISSING: karakeep-secret in karakeep"
   echo "  Apply: kubectl apply -f secrets/karakeep-secret.yaml"
+  MISSING_SECRETS=1
+fi
+
+if ! kubectl get secret tunnel-credentials -n cloudflared &> /dev/null; then
+  echo "MISSING: tunnel-credentials in cloudflared"
+  echo "  See secrets-example.md for setup instructions"
   MISSING_SECRETS=1
 fi
 
@@ -132,8 +139,9 @@ echo "  Wave 0: Cilium (networking)"
 echo "  Wave 1: Longhorn (storage), Snapshot Controller, VolSync"
 echo "  Wave 2: PVC Plumber (backup checker, FAIL-CLOSED gate)"
 echo "  Wave 3: Kyverno (policy engine)"
-echo "  Wave 4: Infrastructure AppSet (gateway, NFS CSI, CNPG)"
-echo "  Wave 6: My-Apps AppSet (Immich, Karakeep)"
+echo "  Wave 4: CNPG Operator (database CRDs)"
+echo "  Wave 5: Infrastructure AppSet (gateway, cloudflared, NFS CSI, CNPG clusters)"
+echo "  Wave 7: My-Apps AppSet (Immich, Karakeep)"
 echo ""
 echo "Monitor progress:"
 echo "  kubectl get applications -n argocd -w"

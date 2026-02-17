@@ -4,17 +4,19 @@ metadata:
   name: infrastructure
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/sync-wave: "5"
 spec:
   generators:
-  - git:
-      # CHANGE: Your Git repo URL
-      repoURL: https://github.com/mitchross/talos-argocd-proxmox-starter.git
-      revision: main
-      directories:
+  - list:
+      elements:
       - path: infrastructure/networking/gateway
+        namespace: gateway
+      - path: infrastructure/networking/cloudflared
+        namespace: cloudflared
       - path: infrastructure/storage/csi-driver-nfs
-      - path: infrastructure/database/*/*
+        namespace: csi-driver-nfs
+      - path: infrastructure/database/cnpg/immich
+        namespace: cloudnative-pg
   template:
     metadata:
       name: '{{path.basename}}'
@@ -32,7 +34,7 @@ spec:
         path: '{{path}}'
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{path.basename}}'
+        namespace: '{{namespace}}'
       syncPolicy:
         automated:
           prune: true
@@ -64,11 +66,6 @@ spec:
         - /status
       - group: postgresql.cnpg.io
         kind: Cluster
-        jsonPointers:
-        - /status
-        - /metadata/generation
-      - group: kyverno.io
-        kind: ClusterPolicy
         jsonPointers:
         - /status
         - /metadata/generation

@@ -3,7 +3,6 @@ kind: Kustomization
 namespace: longhorn-system
 resources:
   - namespace.yaml
-  - volumesnapshotclass.yaml
 helmCharts:
   - name: longhorn
     repo: https://charts.longhorn.io

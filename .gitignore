@@ -27,3 +27,6 @@ credentials.auto.tfvars
 *.auto.tfvars.json
 credentials.sh
 .env
+
+# Local secrets guide (contains real values — never commit)
+secrets.md
