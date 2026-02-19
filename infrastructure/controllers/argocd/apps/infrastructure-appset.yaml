@@ -13,6 +13,8 @@ spec:
         namespace: gateway
       - path: infrastructure/networking/cloudflared
         namespace: cloudflared
+      - path: infrastructure/controllers/external-dns
+        namespace: external-dns
       - path: infrastructure/storage/csi-driver-nfs
         namespace: csi-driver-nfs
       - path: infrastructure/database/cnpg/immich

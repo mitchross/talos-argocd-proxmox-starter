@@ -1,0 +1,64 @@
+# ExternalDNS — auto-creates Cloudflare DNS records from HTTPRoutes
+
+provider:
+  name: cloudflare
+
+cloudflare:
+  proxied: true
+
+# Watch Gateway API HTTPRoutes
+sources:
+  - gateway-httproute
+
+# CHANGE: Your domain
+domainFilters:
+  - demo.example.com
+
+policy: sync
+registry: txt
+txtOwnerId: demo-cluster
+txtPrefix: "external-dns-"
+
+# Only process HTTPRoutes with these labels
+extraArgs:
+  - --label-filter=external-dns=true
+  - --gateway-label-filter=external-dns-gateway=gateway-external
+  - --cloudflare-proxied
+
+logLevel: info
+logFormat: text
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+podSecurityContext:
+  fsGroup: 65534
+  runAsNonRoot: true
+  runAsUser: 65534
+  seccompProfile:
+    type: RuntimeDefault
+
+env:
+  - name: CF_API_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: cloudflare-api-token
+        key: api-token
+
+interval: 1m
+triggerLoopOnEvent: true

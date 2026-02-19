@@ -2,7 +2,7 @@
 
 Run these commands before `./scripts/bootstrap-argocd.sh`.
 
-## 1. Create namespaces first
+## 1. Create namespaces
 
 ```bash
 kubectl create namespace volsync-system
@@ -10,110 +10,67 @@ kubectl create namespace cloudnative-pg
 kubectl create namespace immich
 kubectl create namespace karakeep
 kubectl create namespace cloudflared
+kubectl create namespace external-dns
 ```
 
-## 2. Cloudflared Tunnel Credentials
+## 2. Cloudflared Tunnel Token
 
-### Create a tunnel
+1. Go to https://one.dash.cloudflare.com → Networks → Tunnels → **Create a tunnel**
+2. Choose **Cloudflared** connector type, name your tunnel
+3. Copy the token (the long base64 string from the install command)
 
 ```bash
-# Install cloudflared CLI
-brew install cloudflared        # macOS
-# or: sudo apt install cloudflared  # Ubuntu/Debian
-
-# Login to Cloudflare (opens browser)
-cloudflared tunnel login
-
-# Create a tunnel
-cloudflared tunnel create my-tunnel
-# Output: Created tunnel my-tunnel with id <TUNNEL-ID>
-# Saves credentials to: ~/.cloudflared/<TUNNEL-ID>.json
-
-# Create DNS route (wildcard)
-cloudflared tunnel route dns my-tunnel "*.yourdomain.com"
+kubectl create secret generic cloudflared-token --namespace cloudflared --from-literal=token='YOUR-TUNNEL-TOKEN-HERE'
 ```
 
-### Update config.yaml
+Then configure one public hostname in the tunnel dashboard:
+- Subdomain: `*`, Domain: `yourdomain.com`
+- Service Type: **HTTPS**
+- URL: `cilium-gateway-gateway-external.gateway.svc.cluster.local:443`
+- Additional application settings → TLS → **No TLS Verify**: ON
 
-Edit `infrastructure/networking/cloudflared/config.yaml`:
-- Set `tunnel:` to your tunnel name
-- Set hostnames to `*.yourdomain.com`
+ExternalDNS handles creating individual DNS records automatically from your HTTPRoutes.
 
-### Create the secret
+## 3. Cloudflare API Token (for ExternalDNS)
 
-The credentials JSON file (saved at `~/.cloudflared/<TUNNEL-ID>.json`) looks like this:
-
-```json
-{
-  "AccountTag": "0cd4390209a0adbc162c9bf21771d71",
-  "TunnelSecret": "YjAzMjllNmQtNDE4Mi00MzYwLWI4YTItYmQxOWQ3N2IwMmQz",
-  "TunnelID": "cb12653d-ae9a-41cb-96b3-2f5ce34f088f"
-}
-```
-
-- **AccountTag**: Your Cloudflare account ID (found in dashboard URL or API)
-- **TunnelSecret**: Auto-generated base64 secret (created by `cloudflared tunnel create`)
-- **TunnelID**: The tunnel UUID (matches the JSON filename)
+1. Go to https://dash.cloudflare.com → Profile (top-right) → **API Tokens** → **Create Token**
+2. Use the **"Edit zone DNS"** template
+3. Set permissions:
+   - Zone / DNS / Edit
+   - Zone / Zone / Read
+4. Zone Resources: Include → Specific zone → **your domain**
+5. Click Create Token and copy it
 
 ```bash
-kubectl create secret generic tunnel-credentials \
-  --namespace cloudflared \
-  --from-file=credentials.json=$HOME/.cloudflared/<TUNNEL-ID>.json
+kubectl create secret generic cloudflare-api-token --namespace external-dns --from-literal=api-token='YOUR-CLOUDFLARE-API-TOKEN'
 ```
 
-## 3. Kopia Backup Password
+## 4. Kopia Backup Password
 
 ```bash
-KOPIA_PASSWORD=$(openssl rand -base64 32)
-
-kubectl create secret generic kopia-credentials \
-  --namespace volsync-system \
-  --from-literal=KOPIA_PASSWORD="$KOPIA_PASSWORD"
-
-echo "Save this password: $KOPIA_PASSWORD"
+kubectl create secret generic kopia-credentials --namespace volsync-system --from-literal=KOPIA_PASSWORD="$(openssl rand -base64 32)"
 ```
 
-## 4. Immich Database Credentials
+## 5. Immich Database Credentials
 
-Use the same password in both secrets:
+Same password must be in both namespaces:
 
 ```bash
 DB_PASSWORD=$(openssl rand -base64 32)
-
-# CNPG bootstrap secret (operator namespace)
-kubectl create secret generic immich-app-secret \
-  --namespace cloudnative-pg \
-  --from-literal=username='immich' \
-  --from-literal=password="$DB_PASSWORD"
-
-# App-side credentials (immich namespace)
-kubectl create secret generic immich-db-credentials \
-  --namespace immich \
-  --from-literal=username='immich' \
-  --from-literal=password="$DB_PASSWORD"
-
-echo "Save this password: $DB_PASSWORD"
+kubectl create secret generic immich-app-secret --namespace cloudnative-pg --from-literal=username='immich' --from-literal=password="$DB_PASSWORD"
+kubectl create secret generic immich-db-credentials --namespace immich --from-literal=username='immich' --from-literal=password="$DB_PASSWORD"
 ```
 
-## 5. CNPG S3 Credentials (for database backups)
+## 6. CNPG S3 Credentials (for database backups)
 
 ```bash
-kubectl create secret generic cnpg-s3-credentials \
-  --namespace cloudnative-pg \
-  --from-literal=AWS_ACCESS_KEY_ID='your-s3-access-key' \
-  --from-literal=AWS_SECRET_ACCESS_KEY='your-s3-secret-key'
+kubectl create secret generic cnpg-s3-credentials --namespace cloudnative-pg --from-literal=AWS_ACCESS_KEY_ID='your-access-key' --from-literal=AWS_SECRET_ACCESS_KEY='your-secret-key'
 ```
 
-## 6. Karakeep Secrets
+## 7. Karakeep Secrets
 
 ```bash
-NEXTAUTH_SECRET=$(openssl rand -base64 32)
-MEILI_MASTER_KEY=$(openssl rand -base64 32)
-
-kubectl create secret generic karakeep-secret \
-  --namespace karakeep \
-  --from-literal=NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
-  --from-literal=MEILI_MASTER_KEY="$MEILI_MASTER_KEY"
+kubectl create secret generic karakeep-secret --namespace karakeep --from-literal=NEXTAUTH_SECRET="$(openssl rand -base64 32)" --from-literal=MEILI_MASTER_KEY="$(openssl rand -base64 32)"
 ```
 
 ## Then bootstrap

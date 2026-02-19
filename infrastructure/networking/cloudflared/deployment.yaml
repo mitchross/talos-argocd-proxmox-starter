@@ -33,9 +33,18 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - tunnel
-            - --config
-            - /etc/cloudflared/config/config.yaml
+            - --no-autoupdate
+            - --metrics
+            - 0.0.0.0:2000
             - run
+            - --token
+            - $(TUNNEL_TOKEN)
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflared-token
+                  key: token
           livenessProbe:
             httpGet:
               path: /ready
@@ -65,18 +74,4 @@ spec:
               type: RuntimeDefault
             capabilities:
               drop: ["ALL"]
-          volumeMounts:
-            - name: config
-              mountPath: /etc/cloudflared/config/config.yaml
-              subPath: config.yaml
-            - name: credentials
-              mountPath: /etc/cloudflared/credentials
-              readOnly: true
       restartPolicy: Always
-      volumes:
-        - name: config
-          configMap:
-            name: config
-        - name: credentials
-          secret:
-            secretName: tunnel-credentials

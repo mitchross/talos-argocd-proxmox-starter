@@ -55,6 +55,7 @@ kubectl create namespace cloudnative-pg --dry-run=client -o yaml | kubectl apply
 kubectl create namespace immich --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
 kubectl create namespace karakeep --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
 kubectl create namespace cloudflared --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
+kubectl create namespace external-dns --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
 
 if ! kubectl get secret kopia-credentials -n volsync-system &> /dev/null; then
   echo "MISSING: kopia-credentials in volsync-system"
@@ -86,8 +87,14 @@ if ! kubectl get secret karakeep-secret -n karakeep &> /dev/null; then
   MISSING_SECRETS=1
 fi
 
-if ! kubectl get secret tunnel-credentials -n cloudflared &> /dev/null; then
-  echo "MISSING: tunnel-credentials in cloudflared"
+if ! kubectl get secret cloudflared-token -n cloudflared &> /dev/null; then
+  echo "MISSING: cloudflared-token in cloudflared"
+  echo "  See secrets-example.md for setup instructions"
+  MISSING_SECRETS=1
+fi
+
+if ! kubectl get secret cloudflare-api-token -n external-dns &> /dev/null; then
+  echo "MISSING: cloudflare-api-token in external-dns"
   echo "  See secrets-example.md for setup instructions"
   MISSING_SECRETS=1
 fi
@@ -140,7 +147,7 @@ echo "  Wave 1: Longhorn (storage), Snapshot Controller, VolSync"
 echo "  Wave 2: PVC Plumber (backup checker, FAIL-CLOSED gate)"
 echo "  Wave 3: Kyverno (policy engine)"
 echo "  Wave 4: CNPG Operator (database CRDs)"
-echo "  Wave 5: Infrastructure AppSet (gateway, cloudflared, NFS CSI, CNPG clusters)"
+echo "  Wave 5: Infrastructure AppSet (gateway, cloudflared, external-dns, NFS CSI, CNPG clusters)"
 echo "  Wave 7: My-Apps AppSet (Immich, Karakeep)"
 echo ""
 echo "Monitor progress:"
