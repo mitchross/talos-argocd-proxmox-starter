@@ -1,0 +1,35 @@
+connect:
+  api:
+    enabled: true
+    resources:
+      requests:
+        memory: "150Mi"
+        cpu: "100m"
+      limits:
+        memory: "300Mi"
+        cpu: "200m"
+  sync:
+    enabled: true
+    resources:
+      requests:
+        memory: "150Mi"
+        cpu: "100m"
+      limits:
+        memory: "300Mi"
+        cpu: "200m"
+  credentialsName: "1password-credentials"
+  credentialsKey: "1password-credentials.json"
+operator:
+  create: true
+  token:
+    name: "1password-operator-token"
+    key: "token"
+  resources:
+    requests:
+      memory: "150Mi"
+      cpu: "100m"
+    limits:
+      memory: "300Mi"
+      cpu: "200m"
+  autoRestart: true
+  pollingInterval: 300

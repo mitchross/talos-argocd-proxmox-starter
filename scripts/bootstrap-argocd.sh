@@ -4,6 +4,10 @@ set -euo pipefail
 # Bootstrap ArgoCD Script
 # Installs ArgoCD via Helm, then applies the root Application
 # which triggers the full GitOps sync wave chain.
+#
+# Prerequisites:
+#   1. Cilium installed (correct version)
+#   2. 1Password Connect bootstrap secrets created (see secrets-example.md)
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 ROOT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
@@ -41,71 +45,66 @@ if ! cilium status --wait --wait-duration 30s &> /dev/null; then
   exit 1
 fi
 
-echo "OK: Cilium is healthy"
+# Check Cilium version matches expected
+# Version mismatch causes ArgoCD to upgrade Cilium at Wave 0, which can
+# corrupt BPF state and cause Hubble TLS cert mismatches.
+RUNNING_VERSION=$(cilium version 2>/dev/null | sed -nE 's/.*cilium image.*: v?([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)
+if [ -n "$RUNNING_VERSION" ] && [ "$RUNNING_VERSION" != "$EXPECTED_CILIUM_VERSION" ]; then
+  echo "WARNING: Cilium version mismatch!"
+  echo "  Running:  $RUNNING_VERSION"
+  echo "  Expected: $EXPECTED_CILIUM_VERSION"
+  echo ""
+  echo "  Version mismatch causes ArgoCD to upgrade Cilium at Wave 0,"
+  echo "  which can corrupt BPF state and break Hubble TLS certs."
+  echo ""
+  read -rp "  Continue anyway? (y/N) " response
+  if [[ ! "$response" =~ ^[Yy]$ ]]; then
+    echo "Aborted. Reinstall Cilium with version $EXPECTED_CILIUM_VERSION"
+    exit 1
+  fi
+fi
 
-# Pre-flight: Verify secrets exist
+echo "OK: Cilium is healthy (version: ${RUNNING_VERSION:-unknown})"
+
+# Pre-flight: Verify 1Password Connect bootstrap secrets exist
 echo ""
-echo "--- Pre-flight: Checking secrets ---"
+echo "--- Pre-flight: Checking 1Password bootstrap secrets ---"
 
 MISSING_SECRETS=0
 
-# Check namespaces exist (create if needed)
-kubectl create namespace volsync-system --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
-kubectl create namespace cloudnative-pg --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
-kubectl create namespace immich --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
-kubectl create namespace karakeep --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
-kubectl create namespace cloudflared --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
-kubectl create namespace external-dns --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
+# Create namespaces for 1Password Connect + ESO
+kubectl create namespace 1passwordconnect --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
+kubectl create namespace external-secrets --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
 
-if ! kubectl get secret kopia-credentials -n volsync-system &> /dev/null; then
-  echo "MISSING: kopia-credentials in volsync-system"
-  echo "  Apply: kubectl apply -f secrets/kopia-credentials.yaml"
-  MISSING_SECRETS=1
-fi
-
-if ! kubectl get secret immich-app-secret -n cloudnative-pg &> /dev/null; then
-  echo "MISSING: immich-app-secret in cloudnative-pg"
-  echo "  Apply: kubectl apply -f secrets/immich-db-init-secret.yaml"
-  MISSING_SECRETS=1
-fi
-
-if ! kubectl get secret cnpg-s3-credentials -n cloudnative-pg &> /dev/null; then
-  echo "MISSING: cnpg-s3-credentials in cloudnative-pg"
-  echo "  Apply: kubectl apply -f secrets/cnpg-s3-credentials.yaml"
-  MISSING_SECRETS=1
-fi
-
-if ! kubectl get secret immich-db-credentials -n immich &> /dev/null; then
-  echo "MISSING: immich-db-credentials in immich"
-  echo "  Apply: kubectl apply -f secrets/immich-db-credentials.yaml"
-  MISSING_SECRETS=1
-fi
-
-if ! kubectl get secret karakeep-secret -n karakeep &> /dev/null; then
-  echo "MISSING: karakeep-secret in karakeep"
-  echo "  Apply: kubectl apply -f secrets/karakeep-secret.yaml"
-  MISSING_SECRETS=1
-fi
-
-if ! kubectl get secret cloudflared-token -n cloudflared &> /dev/null; then
-  echo "MISSING: cloudflared-token in cloudflared"
+if ! kubectl get secret 1password-credentials -n 1passwordconnect &> /dev/null; then
+  echo "MISSING: 1password-credentials in 1passwordconnect"
   echo "  See secrets-example.md for setup instructions"
   MISSING_SECRETS=1
 fi
 
-if ! kubectl get secret cloudflare-api-token -n external-dns &> /dev/null; then
-  echo "MISSING: cloudflare-api-token in external-dns"
+if ! kubectl get secret 1password-operator-token -n 1passwordconnect &> /dev/null; then
+  echo "MISSING: 1password-operator-token in 1passwordconnect"
+  echo "  See secrets-example.md for setup instructions"
+  MISSING_SECRETS=1
+fi
+
+if ! kubectl get secret 1passwordconnect -n external-secrets &> /dev/null; then
+  echo "MISSING: 1passwordconnect in external-secrets"
   echo "  See secrets-example.md for setup instructions"
   MISSING_SECRETS=1
 fi
 
 if [ $MISSING_SECRETS -eq 1 ]; then
   echo ""
-  echo "ERROR: Missing secrets. Apply them first (see secrets/README.md)"
+  echo "ERROR: Missing 1Password bootstrap secrets."
+  echo "These are the only secrets you need to create manually."
+  echo "All other secrets are pulled from 1Password automatically via External Secrets Operator."
+  echo ""
+  echo "See secrets-example.md for setup instructions."
   exit 1
 fi
 
-echo "OK: All secrets found"
+echo "OK: 1Password bootstrap secrets found"
 
 # Step 1: Create namespace
 echo ""
@@ -142,13 +141,15 @@ echo ""
 echo "=== ArgoCD bootstrap complete! ==="
 echo ""
 echo "Sync wave order:"
-echo "  Wave 0: Cilium (networking)"
+echo "  Wave 0: Cilium (networking), 1Password Connect, External Secrets Operator"
 echo "  Wave 1: Longhorn (storage), Snapshot Controller, VolSync"
 echo "  Wave 2: PVC Plumber (backup checker, FAIL-CLOSED gate)"
 echo "  Wave 3: Kyverno (policy engine)"
 echo "  Wave 4: CNPG Operator (database CRDs)"
 echo "  Wave 5: Infrastructure AppSet (gateway, cloudflared, external-dns, NFS CSI, CNPG clusters)"
 echo "  Wave 7: My-Apps AppSet (Immich, Karakeep)"
+echo ""
+echo "All application secrets are managed by External Secrets Operator (1Password)."
 echo ""
 echo "Monitor progress:"
 echo "  kubectl get applications -n argocd -w"

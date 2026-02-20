@@ -2,13 +2,46 @@ configs:
   cm:
     create: true
     application.resourceTrackingMethod: "annotation+label"
-  cmp:
-    create: true
-    plugins:
-      kustomize-build-with-helm:
-        generate:
-          command: [ "sh", "-c" ]
-          args: [ "kustomize build --enable-helm" ]
+    kustomize.buildOptions: "--enable-helm"
+    # Enable Application health check for sync waves to work properly
+    # Without this, ArgoCD considers Application resources immediately healthy
+    # and all sync waves deploy simultaneously (defeating the ordering)
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil then
+        if obj.status.health ~= nil then
+          hs.status = obj.status.health.status
+          if obj.status.health.message ~= nil then
+            hs.message = obj.status.health.message
+          end
+        end
+      end
+      return hs
+    # Custom health checks for VolSync resources
+    resource.customizations.health.volsync.backube_ReplicationSource: |
+      hs = {}
+      if obj.status ~= nil then
+        if obj.status.lastSyncTime ~= nil then
+          hs.status = "Healthy"
+          hs.message = "Last sync: " .. obj.status.lastSyncTime
+          return hs
+        end
+      end
+      hs.status = "Progressing"
+      hs.message = "Waiting for first sync"
+      return hs
+    resource.customizations.health.volsync.backube_ReplicationDestination: |
+      hs = {}
+      if obj.status ~= nil and obj.status.latestImage ~= nil then
+        hs.status = "Healthy"
+        hs.message = "Ready for restore"
+        return hs
+      end
+      hs.status = "Progressing"
+      hs.message = "Initializing"
+      return hs
   params:
     server.insecure: true
 
@@ -54,14 +87,6 @@ server:
       memory: 256Mi
 
 repoServer:
-  containerSecurityContext:
-    readOnlyRootFilesystem: true
-  volumes:
-    - name: cmp-kustomize-build-with-helm
-      configMap:
-        name: argocd-cmp-cm
-    - name: cmp-tmp
-      emptyDir: {}
   resources:
     requests:
       cpu: 100m
@@ -69,28 +94,6 @@ repoServer:
     limits:
       cpu: 4000m
       memory: 1024Mi
-  extraContainers:
-    - name: kustomize-build-with-helm
-      command:
-        - argocd-cmp-server
-      image: '{{ default .Values.global.image.repository .Values.repoServer.image.repository }}:{{ default (include "argo-cd.defaultTag" .) .Values.repoServer.image.tag }}'
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 999
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        seccompProfile:
-          type: RuntimeDefault
-        capabilities:
-          drop: [ "ALL" ]
-      volumeMounts:
-        - name: plugins
-          mountPath: /home/argocd/cmp-server/plugins
-        - name: cmp-kustomize-build-with-helm
-          mountPath: /home/argocd/cmp-server/config/plugin.yaml
-          subPath: kustomize-build-with-helm.yaml
-        - mountPath: /tmp
-          name: cmp-tmp
 
 applicationSet:
   resources:

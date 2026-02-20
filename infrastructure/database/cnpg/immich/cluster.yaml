@@ -31,7 +31,7 @@ spec:
       database: immich
       owner: immich
       secret:
-        # CHANGE: Create this secret before deploying (see secrets/immich-db-init-secret.yaml)
+        # Created automatically by ExternalSecret (see externalsecret.yaml)
         name: immich-app-secret
       postInitApplicationSQL:
         - CREATE EXTENSION IF NOT EXISTS vchord CASCADE;

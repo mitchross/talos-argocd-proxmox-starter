@@ -29,12 +29,15 @@ On disaster recovery:
 |-----------|---------|---------|
 | **ArgoCD** | 8.3.0 | GitOps self-management |
 | **Cilium** | 1.19.0 | CNI + Gateway API + L2 LB |
+| **1Password Connect** | 2.3.0 | Secret provider |
+| **External Secrets** | 2.0.0 | Pulls secrets from 1Password into K8s |
 | **Longhorn** | 1.11.0 | Block storage + snapshots |
 | **Kyverno** | 3.7.0 | Policy engine (backup automation) |
 | **VolSync** | 0.18.2 | Async data replication (Kopia) |
 | **PVC Plumber** | 1.1.0 | Backup existence checker |
 | **CNPG** | 0.27.1 | PostgreSQL operator |
 | **Cloudflared** | latest | Cloudflare tunnel for external access |
+| **ExternalDNS** | 1.20.0 | Auto-creates Cloudflare DNS records |
 | **Barman** | (built-in) | Database backup to S3 |
 
 ## Demo Applications
@@ -49,7 +52,8 @@ On disaster recovery:
 ### 1. Prerequisites
 - Kubernetes cluster (Talos OS recommended)
 - NFS server ([setup guide](docs/01-nfs-setup.md))
-- Cloudflare account + domain ([tunnel setup](secrets-example.md#2-cloudflared-tunnel-credentials))
+- 1Password account ([secret setup](secrets-example.md))
+- Cloudflare account + domain
 - Cilium CLI, Helm CLI, kubectl
 
 ### 2. Clone & Configure
@@ -64,12 +68,14 @@ grep -rn "CHANGE" --include="*.yaml" .
 Key values to set:
 - `infrastructure/networking/cilium/values.yaml` — cluster name, API server IP
 - `infrastructure/networking/cilium/ip-pool.yaml` — LoadBalancer IP range
-- `infrastructure/networking/cloudflared/config.yaml` — tunnel name, domain
 - `infrastructure/networking/gateway/gw-external.yaml` — domain
 - `infrastructure/networking/gateway/gw-internal.yaml` — IP, domain
+- `infrastructure/controllers/external-dns/values.yaml` — domain filter
+- `infrastructure/controllers/external-secrets/cluster-secret-store.yaml` — 1Password vault name
 - `infrastructure/controllers/kyverno/policies/volsync-nfs-inject.yaml` — NFS server IP/path
 - `infrastructure/controllers/pvc-plumber/deployment.yaml` — NFS server IP/path
 - All files in `infrastructure/controllers/argocd/apps/` — Git repo URL
+- All `externalsecret.yaml` files — 1Password item names (see [secrets-example.md](secrets-example.md))
 
 ### 3. Install Cilium
 ```bash
@@ -85,67 +91,47 @@ cilium install --version 1.19.0 \
     --set gatewayAPI.enabled=true
 ```
 
-### 4. Create Secrets
+### 4. Create 1Password Items & Bootstrap Secrets
 
-Secrets must exist before ArgoCD deploys the apps that reference them.
-
-See [secrets-example.md](secrets-example.md) for full instructions, or the quick version:
+All secrets are managed by **1Password + External Secrets Operator**. You only create 3 bootstrap secrets manually:
 
 ```bash
-# Create namespaces
-kubectl create namespace volsync-system
-kubectl create namespace cloudnative-pg
-kubectl create namespace immich
-kubectl create namespace karakeep
-kubectl create namespace cloudflared
+# See secrets-example.md for full 1Password item setup
 
-# Cloudflared tunnel credentials
-# (requires: cloudflared tunnel login && cloudflared tunnel create my-tunnel)
-kubectl create secret generic tunnel-credentials \
-  --namespace cloudflared \
-  --from-file=credentials.json=$HOME/.cloudflared/<TUNNEL-ID>.json
+kubectl create namespace 1passwordconnect
+kubectl create namespace external-secrets
 
-# Kopia backup encryption password
-KOPIA_PASSWORD=$(openssl rand -base64 32)
-kubectl create secret generic kopia-credentials \
-  --namespace volsync-system \
-  --from-literal=KOPIA_PASSWORD="$KOPIA_PASSWORD"
+# 1Password Connect server credentials
+kubectl create secret generic 1password-credentials \
+  --namespace 1passwordconnect \
+  --from-file=1password-credentials.json=/path/to/1password-credentials.json
 
-# Immich database credentials (same password in both namespaces)
-DB_PASSWORD=$(openssl rand -base64 32)
-kubectl create secret generic immich-app-secret \
-  --namespace cloudnative-pg \
-  --from-literal=username='immich' \
-  --from-literal=password="$DB_PASSWORD"
-kubectl create secret generic immich-db-credentials \
-  --namespace immich \
-  --from-literal=username='immich' \
-  --from-literal=password="$DB_PASSWORD"
+# 1Password operator token (same access token, for the K8s operator)
+kubectl create secret generic 1password-operator-token \
+  --namespace 1passwordconnect \
+  --from-literal=token='YOUR-1PASSWORD-CONNECT-ACCESS-TOKEN'
 
-# CNPG S3 credentials (for database backups)
-kubectl create secret generic cnpg-s3-credentials \
-  --namespace cloudnative-pg \
-  --from-literal=AWS_ACCESS_KEY_ID='your-access-key' \
-  --from-literal=AWS_SECRET_ACCESS_KEY='your-secret-key'
-
-# Karakeep secrets
-kubectl create secret generic karakeep-secret \
-  --namespace karakeep \
-  --from-literal=NEXTAUTH_SECRET="$(openssl rand -base64 32)" \
-  --from-literal=MEILI_MASTER_KEY="$(openssl rand -base64 32)"
+# ESO connect token (same access token, for External Secrets Operator)
+kubectl create secret generic 1passwordconnect \
+  --namespace external-secrets \
+  --from-literal=token='YOUR-1PASSWORD-CONNECT-ACCESS-TOKEN'
 ```
 
 ### 5. Bootstrap ArgoCD
 ```bash
-# Bootstrap (pre-flight checks verify Cilium + secrets exist)
+# Bootstrap (pre-flight checks verify Cilium + 1Password secrets exist)
 ./scripts/bootstrap-argocd.sh
 
 # Watch applications deploy in wave order
 kubectl get applications -n argocd -w
 ```
 
-### 6. Verify Backups
+### 6. Verify
+
 ```bash
+# Check all secrets are syncing from 1Password
+kubectl get externalsecret -A
+
 # Check Kyverno generated backup resources
 kubectl get replicationsource,replicationdestination -A
 
@@ -156,20 +142,38 @@ kubectl get pods -n volsync-system -l app.kubernetes.io/name=pvc-plumber
 ## Sync Wave Architecture
 
 ```
-Wave 0: Cilium (networking)
+Wave 0: Cilium (networking), 1Password Connect, External Secrets Operator
 Wave 1: Longhorn + VolSync + Snapshot Controller (storage)
 Wave 2: PVC Plumber (backup checker - FAIL-CLOSED gate)
 Wave 3: Kyverno (policy engine - webhooks must register before app PVCs)
 Wave 4: CNPG Operator (database CRDs)
-Wave 5: Infrastructure AppSet (gateway, cloudflared, NFS CSI, CNPG clusters)
+Wave 5: Infrastructure AppSet (gateway, cloudflared, external-dns, NFS CSI, CNPG clusters)
 Wave 7: My-Apps AppSet (Immich, Karakeep - PVCs trigger Kyverno)
 ```
+
+## Secret Management
+
+```
+1Password Vault
+    ↓
+1Password Connect (Wave 0)
+    ↓
+ClusterSecretStore (ESO, Wave 0)
+    ↓
+ExternalSecret CRDs (per-component, in Git)
+    ↓
+Kubernetes Secrets (auto-created and synced)
+    ↓
+Application Pods
+```
+
+Only **3 bootstrap secrets** are created manually. Everything else is pulled from 1Password automatically. See [secrets-example.md](secrets-example.md) for setup.
 
 ## Documentation
 
 | Doc | Description |
 |-----|-------------|
-| [Secrets Setup](secrets-example.md) | How to create all required secrets |
+| [Secrets Setup](secrets-example.md) | 1Password + ESO setup (only 2 manual secrets) |
 | [Prerequisites](docs/00-prerequisites.md) | What you need before starting |
 | [NFS Setup](docs/01-nfs-setup.md) | Setting up NFS on Ubuntu, TrueNAS, Synology, Windows |
 | [Bootstrap Guide](docs/02-bootstrap.md) | Step-by-step deployment |
@@ -183,30 +187,32 @@ Wave 7: My-Apps AppSet (Immich, Karakeep - PVCs trigger Kyverno)
 ```
 infrastructure/
 ├── controllers/
-│   ├── argocd/          # ArgoCD + root app + sync wave Applications
-│   ├── kyverno/         # Policy engine + 3 backup policies
-│   └── pvc-plumber/     # Backup existence checker
+│   ├── argocd/            # ArgoCD + root app + sync wave Applications
+│   ├── 1passwordconnect/  # 1Password Connect server
+│   ├── external-secrets/  # External Secrets Operator + ClusterSecretStore
+│   ├── external-dns/      # Auto-creates Cloudflare DNS records
+│   ├── kyverno/           # Policy engine + 3 backup policies
+│   └── pvc-plumber/       # Backup existence checker
 ├── database/
-│   └── cnpg/            # CloudNativePG operator + Immich Postgres cluster
+│   └── cnpg/              # CloudNativePG operator + Immich Postgres cluster
 ├── networking/
-│   ├── cilium/          # CNI + L2 announcements
-│   ├── cloudflared/     # Cloudflare tunnel
-│   └── gateway/         # Gateway API (external + internal)
+│   ├── cilium/            # CNI + L2 announcements
+│   ├── cloudflared/       # Cloudflare tunnel
+│   └── gateway/           # Gateway API (external + internal)
 └── storage/
-    ├── longhorn/        # Block storage
-    ├── volsync/         # Backup operator + VolumeSnapshotClass
+    ├── longhorn/          # Block storage
+    ├── volsync/           # Backup operator + VolumeSnapshotClass
     ├── snapshot-controller/  # VolumeSnapshot CRDs
-    └── csi-driver-nfs/  # NFS CSI driver
+    └── csi-driver-nfs/    # NFS CSI driver
 
 my-apps/
 └── media/
-    ├── immich/          # Photo management
-    └── karakeep/        # Bookmark manager
+    ├── immich/            # Photo management
+    └── karakeep/          # Bookmark manager
 
-secrets-example.md       # How to create secrets (committed)
-secrets.md               # Your actual secret values (gitignored)
-docs/                    # Setup guides and demos
-scripts/                 # Bootstrap automation
+secrets-example.md         # 1Password setup instructions (committed)
+docs/                      # Setup guides and demos
+scripts/                   # Bootstrap automation
 ```
 
 ## License

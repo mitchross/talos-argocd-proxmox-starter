@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: external-dns
 resources:
   - ns.yaml
+  - externalsecret.yaml
 helmCharts:
   - name: external-dns
     repo: https://kubernetes-sigs.github.io/external-dns

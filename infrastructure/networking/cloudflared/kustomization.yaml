@@ -4,3 +4,4 @@ namespace: cloudflared
 resources:
   - ns.yaml
   - deployment.yaml
+  - externalsecret.yaml

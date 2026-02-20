@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: external-secrets
+resources:
+  - ns.yaml
+  - external-secret.yaml
+  - cluster-secret-store.yaml
+helmCharts:
+  - name: external-secrets
+    repo: https://charts.external-secrets.io
+    version: 2.0.0
+    releaseName: external-secrets
+    valuesFile: values.yaml
+    includeCRDs: true

@@ -8,6 +8,7 @@ labels:
 
 resources:
   - namespace.yaml
+  - externalsecret.yaml
   - library-pvc.yaml
   - ml-cache-pvc.yaml
   - deployment-server.yaml

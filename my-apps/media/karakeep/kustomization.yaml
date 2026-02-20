@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: karakeep
 resources:
 - namespace.yaml
+- externalsecret.yaml
 - chrome/deployment-chrome.yaml
 - chrome/service-chrome.yaml
 - karakeep/configmap.yaml

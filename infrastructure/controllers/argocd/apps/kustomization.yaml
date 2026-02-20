@@ -4,6 +4,8 @@ resources:
   - projects.yaml
   # Wave 0: Foundation
   - cilium-app.yaml
+  - 1password-connect-app.yaml
+  - external-secrets-app.yaml
   # Wave 1: Storage
   - longhorn-app.yaml
   - snapshot-controller-app.yaml
@@ -16,5 +18,5 @@ resources:
   - cnpg-operator-app.yaml
   # Wave 5: Infrastructure (gateway, cloudflared, NFS CSI, CNPG clusters)
   - infrastructure-appset.yaml
-  # Wave 6: Applications (auto-discovery)
+  # Wave 7: Applications (auto-discovery)
   - my-apps-appset.yaml
