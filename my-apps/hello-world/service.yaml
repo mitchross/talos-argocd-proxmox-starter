@@ -6,5 +6,6 @@ spec:
   selector:
     app: hello-world
   ports:
-  - port: 8080
+  - name: http # named port — HTTPRoute backends fail silently without one
+    port: 8080
     targetPort: 8080

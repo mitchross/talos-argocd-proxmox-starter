@@ -4,6 +4,15 @@
 >
 > The ArgoCD, Cloudflare, and application setup steps are still relevant from the previous video and repository. This repository primarily focuses on the automation of infrastructure provisioning using Terraform and Talos OS on Proxmox. For detailed application setup, please refer to the [k3s-argocd-starter](https://github.com/mitchross/k3s-argocd-starter) repository.
 
+## The starter family (which repo do I want?)
+
+| Repo | Provisioning | What you get |
+|---|---|---|
+| **this one** | Terraform + talhelper | the simple on-ramp: Talos on Proxmox + ArgoCD + a handful of stateless apps |
+| [sidero-omni-talos-proxmox-starter](https://github.com/mitchross/sidero-omni-talos-proxmox-starter) | Omni + Proxmox provider | no-SSH, UI-driven Talos cluster provisioning |
+| [talos-argocd-proxmox-advanced-starter](https://github.com/mitchross/talos-argocd-proxmox-advanced-starter) | Omni | the production-shaped tier: sync waves, kopiur restore-before-bind PVC backups, CNPG Postgres, Gateway API, monitoring |
+| [talos-argocd-proxmox](https://github.com/mitchross/talos-argocd-proxmox) | Omni | the live production cluster the others are pruned from |
+
 ````markdown
 # Infrastructure as Code - Terraform + Talos Workflow
 
@@ -227,8 +236,8 @@ App Deployment
 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Gateway API CRDs
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.3.0/standard-install.yaml
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.3.0/experimental-install.yaml
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/experimental-install.yaml
 
 # Argo CD Bootstrap
 kubectl create namespace argocd

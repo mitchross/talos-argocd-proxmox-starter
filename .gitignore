@@ -27,3 +27,6 @@ credentials.auto.tfvars
 *.auto.tfvars.json
 credentials.sh
 .env
+
+# Kustomize helmCharts render caches (any depth) — never commit vendored chart pulls
+**/charts/

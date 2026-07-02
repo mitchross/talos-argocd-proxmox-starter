@@ -7,7 +7,8 @@ spec:
   selector:
     app: proxitok-web
   ports:
-  - port: 8080
+  - name: http # named port — HTTPRoute backends fail silently without one
+    port: 8080
     targetPort: 8080
   type: ClusterIP
 
@@ -21,7 +22,8 @@ spec:
   selector:
     app: proxitok-redis
   ports:
-  - port: 6379
+  - name: redis # named port — HTTPRoute backends fail silently without one
+    port: 6379
     targetPort: 6379
   type: ClusterIP
 
@@ -35,6 +37,7 @@ spec:
   selector:
     app: proxitok-chromedriver
   ports:
-  - port: 9515
+  - name: chromedriver # named port — HTTPRoute backends fail silently without one
+    port: 9515
     targetPort: 9515
   type: ClusterIP

@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/budimanjojo/talhelper/master/pkg/config/schemas/talconfig.json
 # renovate: datasource=docker depName=ghcr.io/siderolabs/installer
-talosVersion: v1.11.0
+talosVersion: v1.13.5
 # renovate: datasource=docker depName=ghcr.io/siderolabs/kubelet
-kubernetesVersion: v1.33.3
+kubernetesVersion: v1.36.2
 # Cluster configuration
 clusterName: proxmox-talos-lab-cluster
 endpoint: https://${CONTROL_PLANE_ENDPOINT_IP}:6443
@@ -85,8 +85,12 @@ nodes:
   - |-
     machine:
       install:
-        image: factory.talos.dev/metal-installer/f14803370bbbcaf588a06a6f85fbf123a0cebbc10aa206f7052d6b37698b055e:v1.11.0
+        image: factory.talos.dev/metal-installer/f14803370bbbcaf588a06a6f85fbf123a0cebbc10aa206f7052d6b37698b055e:v1.13.5
 # Global patches
+# Strategic-merge patches (NOT RFC6902 JSON patches — those break with the
+# multi-doc configs talhelper emits for talosVersion >= v1.12; needs
+# talhelper >= v3.0.37). machine.network is deprecated since Talos 1.12 in
+# favor of multi-doc network documents, but remains supported.
 patches:
 # Network configuration
 - |-
@@ -153,7 +157,7 @@ controlPlane:
   - |-
     machine:
       install:
-        image: factory.talos.dev/metal-installer/ddf38e55e30aa9b2bb0b765054ed63444dc00244ab8bb4ad4ad92486602285f8:v1.11.0
+        image: factory.talos.dev/metal-installer/ddf38e55e30aa9b2bb0b765054ed63444dc00244ab8bb4ad4ad92486602285f8:v1.13.5
 # Worker specific configuration
 worker:
   patches:
@@ -161,7 +165,7 @@ worker:
   - |-
     machine:
       install:
-        image: factory.talos.dev/metal-installer/ddf38e55e30aa9b2bb0b765054ed63444dc00244ab8bb4ad4ad92486602285f8:v1.11.0
+        image: factory.talos.dev/metal-installer/ddf38e55e30aa9b2bb0b765054ed63444dc00244ab8bb4ad4ad92486602285f8:v1.13.5
   # Longhorn storage configuration
   - |-
     machine:

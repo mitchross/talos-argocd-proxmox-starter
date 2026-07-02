@@ -13,6 +13,13 @@ spec:
       - path: infrastructure/networking/*
       - path: infrastructure/storage/*
       - path: infrastructure/controllers/*
+      # Optional demos ship commented-out; exclude them or ArgoCD generates
+      # Applications that fail to render. Remove the exclude AND uncomment
+      # the dir's kustomization.yaml to enable one.
+      - path: infrastructure/storage/csi-driver-nfs
+        exclude: true
+      - path: infrastructure/storage/csi-driver-smb
+        exclude: true
   template:
     metadata:
       name: '{{path.basename}}'
