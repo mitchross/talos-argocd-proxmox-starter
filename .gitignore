@@ -30,3 +30,7 @@ credentials.sh
 
 # Kustomize helmCharts render caches (any depth) — never commit vendored chart pulls
 **/charts/
+
+# Agent-managed worktrees (Claude Code, Hermes)
+.claude/worktrees/
+.worktrees/
